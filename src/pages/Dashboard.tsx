@@ -273,7 +273,7 @@ export function Dashboard() {
                   axisLine={false}
                   tickLine={false}
                 />
-                <Tooltip formatter={(value: number) => formatMoney(value)} />
+                <Tooltip formatter={(value) => formatMoney(Number(value))} />
                 <Line
                   type="monotone"
                   dataKey="entradas"
