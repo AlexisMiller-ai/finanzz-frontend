@@ -12,6 +12,8 @@ export interface Transaction {
   category_id: number | null;
   description: string | null;
   date: string;
+  purchase_date?: string | null;
+  payment_method?: "dinheiro" | "debito" | "credito";
 }
 
 export interface DashboardSummary {

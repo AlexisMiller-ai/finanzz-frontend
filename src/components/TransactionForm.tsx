@@ -20,10 +20,6 @@ export function TransactionForm({
   const [amount, setAmount] = useState(
     editingTransaction ? String(editingTransaction.amount) : "",
   );
-  const [date, setDate] = useState(
-    editingTransaction?.date.slice(0, 10) ||
-      new Date().toISOString().slice(0, 10),
-  );
   const [categoryId, setCategoryId] = useState<number | "">(
     editingTransaction?.category_id || "",
   );
@@ -36,7 +32,20 @@ export function TransactionForm({
     message: string;
   } | null>(null);
 
+  const [paymentMethod, setPaymentMethod] = useState<
+    "dinheiro" | "debito" | "credito"
+  >(editingTransaction?.payment_method || "dinheiro");
+  const [purchaseDate, setPurchaseDate] = useState(
+    editingTransaction?.purchase_date?.slice(0, 10) ||
+      new Date().toISOString().slice(0, 10),
+  );
+  const [billingMonth, setBillingMonth] = useState(
+    editingTransaction?.date.slice(0, 7) ||
+      new Date().toISOString().slice(0, 7),
+  );
+
   const filteredCategories = categories.filter((c) => c.type === type);
+  const isCredit = paymentMethod === "credito";
 
   useEffect(() => {
     api.get<Category[]>("/categories").then((res) => {
@@ -55,23 +64,35 @@ export function TransactionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
+  // quando muda a data da compra e não é crédito, sincroniza o mês de referência automaticamente
+  useEffect(() => {
+    if (!isCredit) {
+      setBillingMonth(purchaseDate.slice(0, 7));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purchaseDate, paymentMethod]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFeedback(null);
 
-    if (!amount || !date) {
+    if (!amount || !purchaseDate) {
       setFeedback({ type: "error", message: "Preencha valor e data." });
       return;
     }
 
     setSaving(true);
     try {
+      const referenceDate = isCredit ? `${billingMonth}-01` : purchaseDate;
+
       const payload = {
         amount: parseFloat(amount.replace(",", ".")),
         type,
         category_id: categoryId || null,
         description: description || null,
-        date,
+        date: referenceDate,
+        purchase_date: purchaseDate,
+        payment_method: paymentMethod,
       };
 
       if (editingTransaction) {
@@ -133,6 +154,38 @@ export function TransactionForm({
         </button>
       </div>
 
+      {type === "despesa" && (
+        <Field label="Forma de pagamento" style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["dinheiro", "debito", "credito"] as const).map((pm) => (
+              <button
+                key={pm}
+                type="button"
+                onClick={() => setPaymentMethod(pm)}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 8,
+                  border: "1px solid #DDD",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: paymentMethod === pm ? "#7C3AED" : "#fff",
+                  color: paymentMethod === pm ? "#fff" : "#555",
+                  borderColor: paymentMethod === pm ? "#7C3AED" : "#DDD",
+                }}
+              >
+                {pm === "dinheiro"
+                  ? "Dinheiro"
+                  : pm === "debito"
+                    ? "Débito"
+                    : "Crédito"}
+              </button>
+            ))}
+          </div>
+        </Field>
+      )}
+
       <Field label="Valor (R$)" style={{ marginBottom: 12 }}>
         <input
           type="text"
@@ -144,14 +197,31 @@ export function TransactionForm({
         />
       </Field>
 
-      <Field label="Data" style={{ marginBottom: 12 }}>
+      <Field
+        label={isCredit ? "Data da compra" : "Data"}
+        style={{ marginBottom: 12 }}
+      >
         <input
           type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
+          value={purchaseDate}
+          onChange={(e) => setPurchaseDate(e.target.value)}
           style={inputStyle}
         />
       </Field>
+
+      {isCredit && (
+        <Field
+          label="Fatura de qual mês (quando vai pagar)"
+          style={{ marginBottom: 12 }}
+        >
+          <input
+            type="month"
+            value={billingMonth}
+            onChange={(e) => setBillingMonth(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+      )}
 
       <Field label="Categoria" style={{ marginBottom: 12 }}>
         <select
