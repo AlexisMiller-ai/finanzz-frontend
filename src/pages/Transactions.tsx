@@ -192,10 +192,30 @@ export function Transactions() {
                       {t.description || category?.name || "Sem descrição"}
                     </div>
                     <div style={{ fontSize: 11, color: "#999" }}>
-                      {category?.name || "Sem categoria"} ·{" "}
-                      {new Date(t.date).toLocaleDateString("pt-BR", {
-                        timeZone: "UTC",
-                      })}
+                      {category?.name || "Sem categoria"}
+                      {t.payment_method === "credito" && t.purchase_date ? (
+                        <>
+                          {" · Comprado em "}
+                          {new Date(t.purchase_date).toLocaleDateString(
+                            "pt-BR",
+                            { timeZone: "UTC" },
+                          )}
+                          {" · Fatura de "}
+                          {new Date(t.date).toLocaleDateString("pt-BR", {
+                            timeZone: "UTC",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </>
+                      ) : (
+                        <>
+                          {" "}
+                          ·{" "}
+                          {new Date(t.date).toLocaleDateString("pt-BR", {
+                            timeZone: "UTC",
+                          })}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
