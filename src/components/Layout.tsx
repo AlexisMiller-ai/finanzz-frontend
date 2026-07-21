@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 function IconDashboard() {
   return (
@@ -116,7 +117,14 @@ const pageTitles: Record<string, string> = {
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const currentTitle = pageTitles[location.pathname] || "";
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
 
   return (
     <div
@@ -212,6 +220,7 @@ export function Layout() {
         </div>
 
         <button
+          onClick={handleLogout}
           style={{
             display: "flex",
             alignItems: "center",

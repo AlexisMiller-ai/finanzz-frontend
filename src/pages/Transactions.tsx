@@ -155,100 +155,106 @@ export function Transactions() {
           Histórico do mês ({transactions.length})
         </h3>
 
-        {loading ? (
-          <p style={{ color: "#999", fontSize: 13 }}>Carregando...</p>
-        ) : transactions.length === 0 ? (
-          <p style={{ color: "#999", fontSize: 13 }}>
-            Nenhum lançamento neste mês.
-          </p>
-        ) : (
-          transactions.map((t) => {
-            const category = t.category_id
-              ? categoryMap.get(t.category_id)
-              : null;
-            return (
-              <div
-                key={t.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "12px 0",
-                  borderBottom: "1px solid #F3F3F3",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span
-                    style={{
-                      width: 9,
-                      height: 9,
-                      borderRadius: "50%",
-                      background: category?.color || "#CCC",
-                      display: "inline-block",
-                    }}
-                  />
-                  <div>
-                    <div style={{ fontSize: 13, color: "#1A1A1A" }}>
-                      {t.description || category?.name || "Sem descrição"}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#999" }}>
-                      {category?.name || "Sem categoria"}
-                      {t.payment_method === "credito" && t.purchase_date ? (
-                        <>
-                          {" · Comprado em "}
-                          {new Date(t.purchase_date).toLocaleDateString(
-                            "pt-BR",
-                            { timeZone: "UTC" },
-                          )}
-                          {" · Fatura de "}
-                          {new Date(t.date).toLocaleDateString("pt-BR", {
-                            timeZone: "UTC",
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </>
-                      ) : (
-                        <>
-                          {" "}
-                          ·{" "}
-                          {new Date(t.date).toLocaleDateString("pt-BR", {
-                            timeZone: "UTC",
-                          })}
-                        </>
-                      )}
+        <div style={{ maxHeight: 520, overflowY: "auto" }}>
+          {loading ? (
+            <p style={{ color: "#999", fontSize: 13 }}>Carregando...</p>
+          ) : transactions.length === 0 ? (
+            <p style={{ color: "#999", fontSize: 13 }}>
+              Nenhum lançamento neste mês.
+            </p>
+          ) : (
+            transactions.map((t) => {
+              const category = t.category_id
+                ? categoryMap.get(t.category_id)
+                : null;
+              return (
+                <div
+                  key={t.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 0",
+                    borderBottom: "1px solid #F3F3F3",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
+                    <span
+                      style={{
+                        width: 9,
+                        height: 9,
+                        borderRadius: "50%",
+                        background: category?.color || "#CCC",
+                        display: "inline-block",
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, color: "#1A1A1A" }}>
+                        {t.description || category?.name || "Sem descrição"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#999" }}>
+                        {category?.name || "Sem categoria"}
+                        {t.payment_method === "credito" && t.purchase_date ? (
+                          <>
+                            {" · Comprado em "}
+                            {new Date(t.purchase_date).toLocaleDateString(
+                              "pt-BR",
+                              { timeZone: "UTC" },
+                            )}
+                            {" · Fatura de "}
+                            {new Date(t.date).toLocaleDateString("pt-BR", {
+                              timeZone: "UTC",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </>
+                        ) : (
+                          <>
+                            {" "}
+                            ·{" "}
+                            {new Date(t.date).toLocaleDateString("pt-BR", {
+                              timeZone: "UTC",
+                            })}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <strong
-                    style={{
-                      fontSize: 13,
-                      color: t.type === "receita" ? "#16A34A" : "#DC2626",
-                    }}
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 14 }}
                   >
-                    {t.type === "receita" ? "+ " : "- "}
-                    {formatMoney(Number(t.amount))}
-                  </strong>
-                  <button
-                    onClick={() => openEditModal(t)}
-                    style={iconButtonStyle}
-                    title="Editar"
-                  >
-                    <IconEdit />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(t.id)}
-                    style={{ ...iconButtonStyle, color: "#DC2626" }}
-                    title="Excluir"
-                  >
-                    <IconTrash />
-                  </button>
+                    <strong
+                      style={{
+                        fontSize: 13,
+                        color: t.type === "receita" ? "#16A34A" : "#DC2626",
+                      }}
+                    >
+                      {t.type === "receita" ? "+ " : "- "}
+                      {formatMoney(Number(t.amount))}
+                    </strong>
+                    <button
+                      onClick={() => openEditModal(t)}
+                      style={iconButtonStyle}
+                      title="Editar"
+                    >
+                      <IconEdit />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      style={{ ...iconButtonStyle, color: "#DC2626" }}
+                      title="Excluir"
+                    >
+                      <IconTrash />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
 
       {showModal && (
