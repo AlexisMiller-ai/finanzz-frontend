@@ -115,16 +115,26 @@ const pageTitles: Record<string, string> = {
   "/metas": "Metas",
 };
 
+function getInitials(name: string) {
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const currentTitle = pageTitles[location.pathname] || "";
 
   function handleLogout() {
     logout();
     navigate("/login");
   }
+
+  const userName = user?.name || "Usuário";
+  const initials = getInitials(userName);
 
   return (
     <div
@@ -279,13 +289,13 @@ export function Layout() {
                   fontWeight: 700,
                 }}
               >
-                AL
+                {initials}
               </div>
               <div>
                 <div
                   style={{ fontSize: 13, fontWeight: 600, color: "#1A1A1A" }}
                 >
-                  Alexis
+                  {userName}
                 </div>
                 <div style={{ fontSize: 11, color: "#999" }}>Administrador</div>
               </div>
