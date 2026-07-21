@@ -143,6 +143,10 @@ export function Layout() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflowY: "auto",
         }}
       >
         <div>
