@@ -14,6 +14,9 @@ export interface Transaction {
   date: string;
   purchase_date?: string | null;
   payment_method?: "dinheiro" | "debito" | "credito";
+  installment_group_id?: string | null;
+  installment_number?: number | null;
+  installment_total?: number | null;
 }
 
 export interface DashboardSummary {
@@ -22,6 +25,8 @@ export interface DashboardSummary {
   saidasPeriodo: number;
   saldoPeriodo: number;
   taxaEconomia: number;
+  savingsGoal: number;
+  availableToSpend: number;
 }
 
 export interface DistributionItem {

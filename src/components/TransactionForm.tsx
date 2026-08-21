@@ -44,8 +44,12 @@ export function TransactionForm({
       new Date().toISOString().slice(0, 7),
   );
 
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installments, setInstallments] = useState("2");
+
   const filteredCategories = categories.filter((c) => c.type === type);
   const isCredit = paymentMethod === "credito";
+  const isEditingInstallment = !!editingTransaction?.installment_group_id;
 
   useEffect(() => {
     api.get<Category[]>("/categories").then((res) => {
@@ -64,7 +68,6 @@ export function TransactionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
-  // quando muda a data da compra e não é crédito, sincroniza o mês de referência automaticamente
   useEffect(() => {
     if (!isCredit) {
       setBillingMonth(purchaseDate.slice(0, 7));
@@ -81,11 +84,19 @@ export function TransactionForm({
       return;
     }
 
+    if (isInstallment && (!installments || Number(installments) < 2)) {
+      setFeedback({
+        type: "error",
+        message: "Informe um número de parcelas válido (mínimo 2).",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const referenceDate = isCredit ? `${billingMonth}-01` : purchaseDate;
 
-      const payload = {
+      const payload: Record<string, unknown> = {
         amount: parseFloat(amount.replace(",", ".")),
         type,
         category_id: categoryId || null,
@@ -94,6 +105,11 @@ export function TransactionForm({
         purchase_date: purchaseDate,
         payment_method: paymentMethod,
       };
+
+      if (isInstallment && !editingTransaction) {
+        payload.is_installment = true;
+        payload.installments = Number(installments);
+      }
 
       if (editingTransaction) {
         await api.put(`/transactions/${editingTransaction.id}`, payload);
@@ -186,7 +202,10 @@ export function TransactionForm({
         </Field>
       )}
 
-      <Field label="Valor (R$)" style={{ marginBottom: 12 }}>
+      <Field
+        label={isInstallment ? "Valor total (R$)" : "Valor (R$)"}
+        style={{ marginBottom: 12 }}
+      >
         <input
           type="text"
           placeholder="0,00"
@@ -211,7 +230,11 @@ export function TransactionForm({
 
       {isCredit && (
         <Field
-          label="Fatura de qual mês (quando vai pagar)"
+          label={
+            isInstallment
+              ? "Fatura da 1ª parcela"
+              : "Fatura de qual mês (quando vai pagar)"
+          }
           style={{ marginBottom: 12 }}
         >
           <input
@@ -221,6 +244,69 @@ export function TransactionForm({
             style={inputStyle}
           />
         </Field>
+      )}
+
+      {type === "despesa" && !editingTransaction && (
+        <div style={{ marginBottom: 12 }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              color: "#333",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isInstallment}
+              onChange={(e) => setIsInstallment(e.target.checked)}
+            />
+            Compra parcelada
+          </label>
+        </div>
+      )}
+
+      {isInstallment && !editingTransaction && (
+        <Field label="Número de parcelas" style={{ marginBottom: 12 }}>
+          <input
+            type="number"
+            min={2}
+            max={48}
+            value={installments}
+            onChange={(e) => setInstallments(e.target.value)}
+            style={inputStyle}
+          />
+          {amount && Number(installments) >= 2 && (
+            <p style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
+              {installments}x de{" "}
+              {(
+                parseFloat(amount.replace(",", ".")) / Number(installments)
+              ).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+            </p>
+          )}
+        </Field>
+      )}
+
+      {isEditingInstallment && (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            marginBottom: 12,
+            fontSize: 12,
+            background: "#FEF3C7",
+            color: "#92400E",
+          }}
+        >
+          Esta é a parcela {editingTransaction?.installment_number}/
+          {editingTransaction?.installment_total} de uma compra parcelada. A
+          edição afeta só esta parcela.
+        </div>
       )}
 
       <Field label="Categoria" style={{ marginBottom: 12 }}>
@@ -286,7 +372,9 @@ export function TransactionForm({
             ? "Salvando..."
             : editingTransaction
               ? "Salvar Alterações"
-              : "Confirmar Lançamento"}
+              : isInstallment
+                ? "Criar Parcelamento"
+                : "Confirmar Lançamento"}
         </button>
         {onCancel && (
           <button

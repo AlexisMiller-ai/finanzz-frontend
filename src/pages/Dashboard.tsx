@@ -89,6 +89,23 @@ function IconPiggy() {
   );
 }
 
+function IconTarget() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function Dashboard() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(() =>
@@ -105,6 +122,9 @@ export function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalInput, setGoalInput] = useState("");
+  const [savingGoal, setSavingGoal] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -152,6 +172,25 @@ export function Dashboard() {
     value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
+
+  async function handleSaveGoal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!goalInput) return;
+    setSavingGoal(true);
+    try {
+      await api.post("/goals", {
+        month_ref: `${month}-01`,
+        savings_goal: parseFloat(goalInput.replace(",", ".")),
+      });
+      setShowGoalModal(false);
+      setGoalInput("");
+      loadData();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingGoal(false);
+    }
+  }
 
   if (loading && !summary) return <div>Carregando...</div>;
   if (!summary) return <div>Erro ao carregar dados.</div>;
@@ -246,12 +285,106 @@ export function Dashboard() {
         />
       </div>
 
+      {/* Card de meta de economia / disponível para gastar */}
+      <div
+        style={{
+          marginTop: 16,
+          background: "#fff",
+          borderRadius: 16,
+          padding: 20,
+          border: "1px solid #EEE",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: "#F3EEFF",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#7C3AED",
+            }}
+          >
+            <IconTarget />
+          </div>
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                color: "#999",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+              }}
+            >
+              META DE ECONOMIA DO MÊS
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#1A1A1A" }}>
+              {summary.savingsGoal > 0
+                ? formatMoney(summary.savingsGoal)
+                : "Nenhuma meta definida"}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign: "right" }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#999",
+              fontWeight: 700,
+              letterSpacing: 0.5,
+            }}
+          >
+            DISPONÍVEL PARA GASTAR
+          </div>
+          <div
+            style={{
+              fontSize: 20,
+              fontWeight: 800,
+              color: summary.availableToSpend < 0 ? "#DC2626" : "#16A34A",
+            }}
+          >
+            {formatMoney(summary.availableToSpend)}
+          </div>
+        </div>
+
+        <button
+          onClick={() => {
+            setGoalInput(
+              summary.savingsGoal > 0 ? String(summary.savingsGoal) : "",
+            );
+            setShowGoalModal(true);
+          }}
+          style={{
+            padding: "10px 16px",
+            borderRadius: 8,
+            border: "1px solid #DDD",
+            background: "#fff",
+            color: "#555",
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          {summary.savingsGoal > 0 ? "Editar meta" : "Definir meta"}
+        </button>
+      </div>
+
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "2fr 1fr",
           gap: 16,
-          marginTop: 24,
+          marginTop: 16,
         }}
       >
         <div style={cardStyle}>
@@ -437,6 +570,87 @@ export function Dashboard() {
             }}
             onCancel={() => setShowModal(false)}
           />
+        </Modal>
+      )}
+
+      {showGoalModal && (
+        <Modal onClose={() => setShowGoalModal(false)}>
+          <form onSubmit={handleSaveGoal}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 16,
+                color: "#1A1A1A",
+                marginBottom: 16,
+              }}
+            >
+              Meta de economia — {formatMonthLabel(month)}
+            </h3>
+            <label
+              style={{
+                fontSize: 12,
+                color: "#555",
+                fontWeight: 600,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Quanto você quer guardar este mês (R$)
+            </label>
+            <input
+              type="text"
+              placeholder="0,00"
+              value={goalInput}
+              onChange={(e) => setGoalInput(e.target.value)}
+              autoFocus
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                borderRadius: 8,
+                border: "1px solid #DDD",
+                fontSize: 14,
+                color: "#1A1A1A",
+                outline: "none",
+                marginBottom: 16,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="submit"
+                disabled={savingGoal}
+                style={{
+                  flex: 1,
+                  padding: "12px 0",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#7C3AED",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: savingGoal ? "not-allowed" : "pointer",
+                  opacity: savingGoal ? 0.7 : 1,
+                }}
+              >
+                {savingGoal ? "Salvando..." : "Salvar meta"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGoalModal(false)}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #DDD",
+                  background: "#fff",
+                  color: "#555",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>

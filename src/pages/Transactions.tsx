@@ -82,8 +82,19 @@ export function Transactions() {
     setShowModal(true);
   }
 
-  async function handleDelete(id: number) {
-    await api.delete(`/transactions/${id}`);
+  async function handleDelete(t: Transaction) {
+    if (t.installment_group_id) {
+      const confirmAll = window.confirm(
+        `Esta é a parcela ${t.installment_number}/${t.installment_total}. Deseja excluir TODAS as parcelas dessa compra, ou só esta?\n\nOK = excluir todas\nCancelar = excluir só esta parcela`,
+      );
+      if (confirmAll) {
+        await api.delete(`/transactions/group/${t.installment_group_id}`);
+      } else {
+        await api.delete(`/transactions/${t.id}`);
+      }
+    } else {
+      await api.delete(`/transactions/${t.id}`);
+    }
     await loadData();
   }
 
@@ -196,6 +207,13 @@ export function Transactions() {
                       </div>
                       <div style={{ fontSize: 11, color: "#999" }}>
                         {category?.name || "Sem categoria"}
+                        {t.installment_total && t.installment_total > 1 && (
+                          <>
+                            {" "}
+                            · Parcela {t.installment_number}/
+                            {t.installment_total}
+                          </>
+                        )}
                         {t.payment_method === "credito" && t.purchase_date ? (
                           <>
                             {" · Comprado em "}
@@ -243,7 +261,7 @@ export function Transactions() {
                       <IconEdit />
                     </button>
                     <button
-                      onClick={() => handleDelete(t.id)}
+                      onClick={() => handleDelete(t)}
                       style={{ ...iconButtonStyle, color: "#DC2626" }}
                       title="Excluir"
                     >
