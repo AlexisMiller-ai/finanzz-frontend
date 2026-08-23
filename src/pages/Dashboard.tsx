@@ -284,54 +284,30 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Card de total guardado (acumulado de todos os meses) */}
+      {/* Total guardado, versão discreta */}
       <div
         style={{
           marginTop: 16,
-          background: "linear-gradient(135deg, #1A1A1A, #2D2D2D)",
-          borderRadius: 16,
-          padding: 20,
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          color: "#fff",
+          gap: 8,
+          fontSize: 13,
+          color: "#888",
+          padding: "4px 4px",
         }}
       >
-        <div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "#AAA",
-              fontWeight: 700,
-              letterSpacing: 0.5,
-            }}
-          >
-            TOTAL GUARDADO (TODOS OS MESES)
-          </div>
-          <div
-            style={{
-              fontSize: 26,
-              fontWeight: 800,
-              marginTop: 6,
-              color: summary.saldoGeralAcumulado < 0 ? "#F87171" : "#fff",
-            }}
-          >
-            {formatMoney(summary.saldoGeralAcumulado)}
-          </div>
-        </div>
-        <div
+        <span style={{ display: "flex", color: "#AAA" }}>
+          <IconPiggy />
+        </span>
+        <span>Total guardado desde Agosto/2026:</span>
+        <strong
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: "rgba(255,255,255,0.1)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            color: summary.saldoGeralAcumulado < 0 ? "#DC2626" : "#555",
+            fontWeight: 700,
           }}
         >
-          <IconPiggy />
-        </div>
+          {formatMoney(summary.saldoGeralAcumulado)}
+        </strong>
       </div>
 
       {/* Card de meta de economia / disponível para gastar */}
