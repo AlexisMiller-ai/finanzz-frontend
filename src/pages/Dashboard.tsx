@@ -107,6 +107,22 @@ function IconTarget() {
   );
 }
 
+function IconEdit() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 export function Dashboard() {
   const navigate = useNavigate();
   const [month, setMonth] = useState(getCurrentMonth);
@@ -124,6 +140,9 @@ export function Dashboard() {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [goalInput, setGoalInput] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
+  const [showSavingsModal, setShowSavingsModal] = useState(false);
+  const [savingsInput, setSavingsInput] = useState("");
+  const [savingSavings, setSavingSavings] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -188,6 +207,24 @@ export function Dashboard() {
       console.error(error);
     } finally {
       setSavingGoal(false);
+    }
+  }
+
+  async function handleSaveSavings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!savingsInput) return;
+    setSavingSavings(true);
+    try {
+      await api.put("/savings", {
+        manual_total: parseFloat(savingsInput.replace(",", ".")),
+      });
+      setShowSavingsModal(false);
+      setSavingsInput("");
+      loadData();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingSavings(false);
     }
   }
 
@@ -284,7 +321,7 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Total guardado, versão discreta */}
+      {/* Total guardado, versão discreta, com botão de editar */}
       <div
         style={{
           marginTop: 16,
@@ -308,6 +345,23 @@ export function Dashboard() {
         >
           {formatMoney(summary.saldoGeralAcumulado)}
         </strong>
+        <button
+          onClick={() => {
+            setSavingsInput(String(summary.saldoGeralAcumulado));
+            setShowSavingsModal(true);
+          }}
+          title="Editar valor guardado"
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "#AAA",
+            cursor: "pointer",
+            display: "flex",
+            padding: 2,
+          }}
+        >
+          <IconEdit />
+        </button>
       </div>
 
       {/* Card de meta de economia / disponível para gastar */}
@@ -661,6 +715,92 @@ export function Dashboard() {
               <button
                 type="button"
                 onClick={() => setShowGoalModal(false)}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #DDD",
+                  background: "#fff",
+                  color: "#555",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showSavingsModal && (
+        <Modal onClose={() => setShowSavingsModal(false)}>
+          <form onSubmit={handleSaveSavings}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 16,
+                color: "#1A1A1A",
+                marginBottom: 8,
+              }}
+            >
+              Editar total guardado
+            </h3>
+            <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+              Ajuste o valor que você realmente tem guardado. A partir de agora,
+              o total continua sendo atualizado automaticamente conforme você
+              lançar novas transações.
+            </p>
+            <label
+              style={{
+                fontSize: 12,
+                color: "#555",
+                fontWeight: 600,
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Valor total guardado (R$)
+            </label>
+            <input
+              type="text"
+              placeholder="0,00"
+              value={savingsInput}
+              onChange={(e) => setSavingsInput(e.target.value)}
+              autoFocus
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                borderRadius: 8,
+                border: "1px solid #DDD",
+                fontSize: 14,
+                color: "#1A1A1A",
+                outline: "none",
+                marginBottom: 16,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="submit"
+                disabled={savingSavings}
+                style={{
+                  flex: 1,
+                  padding: "12px 0",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#7C3AED",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: savingSavings ? "not-allowed" : "pointer",
+                  opacity: savingSavings ? 0.7 : 1,
+                }}
+              >
+                {savingSavings ? "Salvando..." : "Salvar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSavingsModal(false)}
                 style={{
                   padding: "12px 16px",
                   borderRadius: 8,
