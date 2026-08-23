@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import type { Category, Transaction } from "../types";
-import { formatMonthLabel, shiftMonth } from "../utils/date";
+import { formatMonthLabel, shiftMonth, getCurrentMonth } from "../utils/date";
 import { Modal } from "../components/Modal";
 import { TransactionForm } from "../components/TransactionForm";
 
@@ -39,9 +39,7 @@ function IconEdit() {
 }
 
 export function Transactions() {
-  const [month, setMonth] = useState(() =>
-    new Date().toISOString().slice(0, 7),
-  );
+  const [month, setMonth] = useState(getCurrentMonth);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

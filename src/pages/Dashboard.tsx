@@ -21,6 +21,7 @@ import {
   formatMonthShort,
   shiftMonth,
   getLastNMonths,
+  getCurrentMonth,
 } from "../utils/date";
 import { Modal } from "../components/Modal";
 import { TransactionForm } from "../components/TransactionForm";
@@ -108,9 +109,7 @@ function IconTarget() {
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const [month, setMonth] = useState(() =>
-    new Date().toISOString().slice(0, 7),
-  );
+  const [month, setMonth] = useState(getCurrentMonth);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [distribution, setDistribution] = useState<DistributionItem[]>([]);
   const [evolution, setEvolution] = useState<
@@ -283,6 +282,56 @@ export function Dashboard() {
           isPercentage
           subtitle={`${summary.taxaEconomia}% da renda guardada`}
         />
+      </div>
+
+      {/* Card de total guardado (acumulado de todos os meses) */}
+      <div
+        style={{
+          marginTop: 16,
+          background: "linear-gradient(135deg, #1A1A1A, #2D2D2D)",
+          borderRadius: 16,
+          padding: 20,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          color: "#fff",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#AAA",
+              fontWeight: 700,
+              letterSpacing: 0.5,
+            }}
+          >
+            TOTAL GUARDADO (TODOS OS MESES)
+          </div>
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 800,
+              marginTop: 6,
+              color: summary.saldoGeralAcumulado < 0 ? "#F87171" : "#fff",
+            }}
+          >
+            {formatMoney(summary.saldoGeralAcumulado)}
+          </div>
+        </div>
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <IconPiggy />
+        </div>
       </div>
 
       {/* Card de meta de economia / disponível para gastar */}

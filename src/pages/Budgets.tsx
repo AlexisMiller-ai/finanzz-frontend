@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import type { Category } from "../types";
-import { formatMonthLabel, shiftMonth } from "../utils/date";
+import { formatMonthLabel, shiftMonth, getCurrentMonth } from "../utils/date";
 
 interface BudgetItem {
   id: number;
@@ -32,9 +32,7 @@ function IconTrash() {
 }
 
 export function Budgets() {
-  const [month, setMonth] = useState(() =>
-    new Date().toISOString().slice(0, 7),
-  );
+  const [month, setMonth] = useState(getCurrentMonth);
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +104,6 @@ export function Budgets() {
   const formatMoney = (value: number) =>
     value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  // categorias que ainda não têm meta definida nesse mês
   const categoriesWithoutBudget = categories.filter(
     (c) => !budgets.some((b) => b.categoryId === c.id),
   );
@@ -156,7 +153,6 @@ export function Budgets() {
           alignItems: "flex-start",
         }}
       >
-        {/* Formulário */}
         <form
           onSubmit={handleSubmit}
           style={{ ...cardStyle, position: "sticky", top: 20 }}
@@ -237,7 +233,6 @@ export function Budgets() {
           </button>
         </form>
 
-        {/* Lista de metas */}
         <div style={cardStyle}>
           <h3
             style={{
