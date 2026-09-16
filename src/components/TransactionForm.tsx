@@ -1,437 +1,362 @@
-import { useEffect, useState } from "react";
-import { api } from "../services/api";
-import type { Category, Transaction } from "../types";
+import { useState } from "react";
+import { api, getErrorMessage } from "../services/api";
+import { useApp } from "../contexts/AppContext";
+import { useToast } from "../contexts/ToastContext";
+import { useFetch } from "../hooks/useFetch";
+import type { Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
+import { formatMonthShort, getCurrentMonth, shiftMonth, todayISO } from "../utils/date";
+import { formatMoney, numberToCents } from "../utils/money";
+import { getCardClosingDay } from "../utils/preferences";
+import { Modal } from "./Modal";
+import { Field, FormError, MoneyInput, Segmented } from "./ui/Form";
+import { IconInfo } from "./ui/Icons";
 
-interface Props {
-  editingTransaction?: Transaction | null;
-  onSaved: () => void;
-  onCancel?: () => void;
+type Mode = "single" | "installments" | "recurring";
+
+const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
+  { value: "dinheiro", label: "Pix/Dinheiro" },
+  { value: "debito", label: "Débito" },
+  { value: "credito", label: "Crédito" },
+];
+
+const INSTALLMENT_SUFFIX = /\s*\(\d+\/\d+\)$/;
+
+/** Mês da fatura sugerido: compras a partir do dia de fechamento vão para a fatura seguinte. */
+function suggestBillingMonth(purchaseDate: string): string {
+  const month = purchaseDate.slice(0, 7) || getCurrentMonth();
+  const closingDay = getCardClosingDay();
+  const day = Number(purchaseDate.slice(8, 10));
+  return closingDay && day >= closingDay ? shiftMonth(month, 1) : month;
 }
 
-export function TransactionForm({
-  editingTransaction,
-  onSaved,
-  onCancel,
-}: Props) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [type, setType] = useState<"despesa" | "receita">(
-    editingTransaction?.type || "despesa",
-  );
-  const [amount, setAmount] = useState(
-    editingTransaction ? String(editingTransaction.amount) : "",
-  );
-  const [categoryId, setCategoryId] = useState<number | "">(
-    editingTransaction?.category_id || "",
+interface Props {
+  editing?: Transaction | null;
+  onClose: () => void;
+  onDelete?: () => void;
+}
+
+export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
+  const { notifyDataChanged, month } = useApp();
+  const toast = useToast();
+  const { data: categories = [] } = useFetch<Category[]>("/categories");
+
+  const isEditing = !!editing;
+  const isGroup = !!(editing?.installment_group_id || editing?.recurrence_id);
+
+  // Novo lançamento em outro mês começa naquele mês, e não em "hoje".
+  const initialDate = month === getCurrentMonth() ? todayISO() : `${month}-01`;
+
+  const [type, setType] = useState<TransactionType>(editing?.type ?? "despesa");
+  const [cents, setCents] = useState(editing ? numberToCents(editing.amount) : 0);
+  const [categoryId, setCategoryId] = useState<number | "" | null>(
+    editing ? (editing.category_id ?? "") : null,
   );
   const [description, setDescription] = useState(
-    editingTransaction?.description || "",
+    (editing?.description ?? "").replace(INSTALLMENT_SUFFIX, ""),
   );
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
-  const [paymentMethod, setPaymentMethod] = useState<
-    "dinheiro" | "debito" | "credito"
-  >(editingTransaction?.payment_method || "dinheiro");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    editing?.payment_method ?? "dinheiro",
+  );
   const [purchaseDate, setPurchaseDate] = useState(
-    editingTransaction?.purchase_date?.slice(0, 10) ||
-      new Date().toISOString().slice(0, 10),
+    editing ? (editing.payment_method === "credito" ? editing.purchase_date || editing.date : editing.date) : initialDate,
   );
-  const [billingMonth, setBillingMonth] = useState(
-    editingTransaction?.date.slice(0, 7) ||
-      new Date().toISOString().slice(0, 7),
+  const [billingOverride, setBillingOverride] = useState<string | null>(
+    editing?.payment_method === "credito" ? editing.date.slice(0, 7) : null,
   );
+  const [mode, setMode] = useState<Mode>("single");
+  const [installmentsInput, setInstallmentsInput] = useState("2");
+  const [repeatInput, setRepeatInput] = useState("12");
+  const [scope, setScope] = useState<EditScope>("single");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [isInstallment, setIsInstallment] = useState(false);
-  const [installments, setInstallments] = useState("2");
+  const isCredit = type === "despesa" && paymentMethod === "credito";
+  const billingMonth = billingOverride ?? suggestBillingMonth(purchaseDate);
+  const typeCategories = categories.filter((c) => c.type === type);
+  const effectiveCategoryId =
+    categoryId === null ? (typeCategories[0]?.id ?? "") : categoryId;
+  const effectiveMode: Mode = type === "receita" && mode === "installments" ? "single" : mode;
+  const installments = Number(installmentsInput) || 0;
+  const repeatMonths = Number(repeatInput) || 0;
 
-  const filteredCategories = categories.filter((c) => c.type === type);
-  const isCredit = paymentMethod === "credito";
-  const isEditingInstallment = !!editingTransaction?.installment_group_id;
+  function changeType(next: TransactionType) {
+    setType(next);
+    if (!isEditing || next !== editing?.type) setCategoryId(null);
+    if (next === "receita" && paymentMethod === "credito") setPaymentMethod("dinheiro");
+  }
 
-  useEffect(() => {
-    api.get<Category[]>("/categories").then((res) => {
-      setCategories(res.data);
-      if (!editingTransaction && res.data.length > 0) {
-        setCategoryId(res.data.find((c) => c.type === type)?.id || "");
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  async function save(keepOpen: boolean) {
+    setError(null);
 
-  useEffect(() => {
-    if (!editingTransaction) {
-      setCategoryId(categories.find((c) => c.type === type)?.id || "");
+    if (cents <= 0) return setError("Informe um valor maior que zero.");
+    if (!purchaseDate) return setError("Informe a data.");
+    if (effectiveMode === "installments" && (installments < 2 || installments > 72)) {
+      return setError("O número de parcelas deve ficar entre 2 e 72.");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
-
-  useEffect(() => {
-    if (!isCredit) {
-      setBillingMonth(purchaseDate.slice(0, 7));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purchaseDate, paymentMethod]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFeedback(null);
-
-    if (!amount || !purchaseDate) {
-      setFeedback({ type: "error", message: "Preencha valor e data." });
-      return;
+    if (effectiveMode === "recurring" && (repeatMonths < 2 || repeatMonths > 60)) {
+      return setError("A repetição deve ficar entre 2 e 60 meses.");
     }
 
-    if (isInstallment && (!installments || Number(installments) < 2)) {
-      setFeedback({
-        type: "error",
-        message: "Informe um número de parcelas válido (mínimo 2).",
-      });
-      return;
+    const payload: Record<string, unknown> = {
+      amount: cents / 100,
+      type,
+      category_id: effectiveCategoryId || null,
+      description: description.trim() || null,
+      date: isCredit ? `${billingMonth}-01` : purchaseDate,
+      purchase_date: purchaseDate,
+      payment_method: type === "receita" ? "dinheiro" : paymentMethod,
+    };
+
+    if (!isEditing && effectiveMode === "installments") {
+      payload.is_installment = true;
+      payload.installments = installments;
     }
+    if (!isEditing && effectiveMode === "recurring") {
+      payload.repeat_months = repeatMonths;
+    }
+    if (isEditing && isGroup) payload.scope = scope;
 
     setSaving(true);
     try {
-      const referenceDate = isCredit ? `${billingMonth}-01` : purchaseDate;
-
-      const payload: Record<string, unknown> = {
-        amount: parseFloat(amount.replace(",", ".")),
-        type,
-        category_id: categoryId || null,
-        description: description || null,
-        date: referenceDate,
-        purchase_date: purchaseDate,
-        payment_method: paymentMethod,
-      };
-
-      if (isInstallment && !editingTransaction) {
-        payload.is_installment = true;
-        payload.installments = Number(installments);
-      }
-
-      if (editingTransaction) {
-        await api.put(`/transactions/${editingTransaction.id}`, payload);
+      if (editing) {
+        const res = await api.put<{ transactions: Transaction[] }>(`/transactions/${editing.id}`, payload);
+        const count = res.data.transactions.length;
+        toast(count > 1 ? `${count} lançamentos atualizados` : "Lançamento atualizado");
       } else {
-        await api.post("/transactions", payload);
+        const res = await api.post<{ transactions: Transaction[] }>("/transactions", payload);
+        const count = res.data.transactions.length;
+        toast(count > 1 ? `${count} lançamentos criados` : "Lançamento adicionado");
       }
+      notifyDataChanged();
 
-      onSaved();
-    } catch (error) {
-      console.error(error);
-      setFeedback({ type: "error", message: "Erro ao salvar lançamento." });
+      if (keepOpen) {
+        setCents(0);
+        setDescription("");
+        setMode("single");
+        setSaving(false);
+        document.getElementById("tx-amount")?.focus();
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, "Não foi possível salvar o lançamento."));
       setSaving(false);
     }
   }
 
+  const perInstallment = installments >= 2 ? Math.floor(cents / installments) : cents;
+  const title = isEditing ? "Editar lançamento" : "Novo lançamento";
+
   return (
-    <form onSubmit={handleSubmit}>
-      <h3
-        style={{ margin: 0, fontSize: 16, color: "#1A1A1A", marginBottom: 16 }}
-      >
-        {editingTransaction ? "Editar Lançamento" : "Novo Lançamento"}
-      </h3>
+    <Modal
+      title={title}
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        save(false);
+      }}
+      footer={
+        <>
+          {onDelete && (
+            <button type="button" className="btn btn-danger-ghost" style={{ marginRight: "auto" }} onClick={onDelete}>
+              Excluir
+            </button>
+          )}
+          {!isEditing && (
+            <button type="button" className="btn btn-ghost hide-mobile" disabled={saving} onClick={() => save(true)}>
+              Salvar e adicionar outro
+            </button>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? <span className="spinner" /> : isEditing ? "Salvar alterações" : "Adicionar"}
+          </button>
+        </>
+      }
+    >
+      <div className="form-stack">
+        <Segmented
+          className="type"
+          label="Tipo"
+          value={type}
+          onChange={changeType}
+          options={[
+            { value: "despesa", label: "Despesa" },
+            { value: "receita", label: "Receita" },
+          ]}
+        />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button
-          type="button"
-          onClick={() => setType("despesa")}
-          style={{
-            flex: 1,
-            padding: "10px 0",
-            borderRadius: 8,
-            border: "none",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: 13,
-            background: type === "despesa" ? "#DC2626" : "#F3F3F3",
-            color: type === "despesa" ? "#fff" : "#888",
-          }}
-        >
-          Despesa
-        </button>
-        <button
-          type="button"
-          onClick={() => setType("receita")}
-          style={{
-            flex: 1,
-            padding: "10px 0",
-            borderRadius: 8,
-            border: "none",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: 13,
-            background: type === "receita" ? "#16A34A" : "#F3F3F3",
-            color: type === "receita" ? "#fff" : "#888",
-          }}
-        >
-          Receita
-        </button>
-      </div>
-
-      {type === "despesa" && (
-        <Field label="Forma de pagamento" style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {(["dinheiro", "debito", "credito"] as const).map((pm) => (
-              <button
-                key={pm}
-                type="button"
-                onClick={() => setPaymentMethod(pm)}
-                style={{
-                  flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 8,
-                  border: "1px solid #DDD",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: paymentMethod === pm ? "#7C3AED" : "#fff",
-                  color: paymentMethod === pm ? "#fff" : "#555",
-                  borderColor: paymentMethod === pm ? "#7C3AED" : "#DDD",
-                }}
-              >
-                {pm === "dinheiro"
-                  ? "Dinheiro"
-                  : pm === "debito"
-                    ? "Débito"
-                    : "Crédito"}
-              </button>
-            ))}
-          </div>
+        <Field label={effectiveMode === "installments" ? "Valor total da compra" : "Valor"} htmlFor="tx-amount">
+          <MoneyInput id="tx-amount" cents={cents} onChange={setCents} large autoFocus />
         </Field>
-      )}
 
-      <Field
-        label={isInstallment ? "Valor total (R$)" : "Valor (R$)"}
-        style={{ marginBottom: 12 }}
-      >
-        <input
-          type="text"
-          placeholder="0,00"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          style={inputStyle}
-          autoFocus
-        />
-      </Field>
-
-      <Field
-        label={isCredit ? "Data da compra" : "Data"}
-        style={{ marginBottom: 12 }}
-      >
-        <input
-          type="date"
-          value={purchaseDate}
-          onChange={(e) => setPurchaseDate(e.target.value)}
-          style={inputStyle}
-        />
-      </Field>
-
-      {isCredit && (
-        <Field
-          label={
-            isInstallment
-              ? "Fatura da 1ª parcela"
-              : "Fatura de qual mês (quando vai pagar)"
-          }
-          style={{ marginBottom: 12 }}
-        >
+        <Field label="Descrição" htmlFor="tx-description">
           <input
-            type="month"
-            value={billingMonth}
-            onChange={(e) => setBillingMonth(e.target.value)}
-            style={inputStyle}
+            id="tx-description"
+            className="input"
+            placeholder={type === "despesa" ? "Ex.: Mercado, Uber, Netflix" : "Ex.: Salário, Freela"}
+            value={description}
+            maxLength={240}
+            onChange={(e) => setDescription(e.target.value)}
           />
         </Field>
-      )}
 
-      {type === "despesa" && !editingTransaction && (
-        <div style={{ marginBottom: 12 }}>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 13,
-              color: "#333",
-              cursor: "pointer",
-            }}
+        <Field label="Categoria" htmlFor="tx-category">
+          <select
+            id="tx-category"
+            className="select"
+            value={effectiveCategoryId}
+            onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Sem categoria</option>
+            {typeCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {type === "despesa" && (
+          <Field label="Forma de pagamento">
+            <Segmented
+              label="Forma de pagamento"
+              value={paymentMethod}
+              onChange={setPaymentMethod}
+              options={PAYMENT_OPTIONS}
+            />
+          </Field>
+        )}
+
+        <div className="field-row">
+          <Field label={isCredit ? "Data da compra" : "Data"} htmlFor="tx-date">
+            <input
+              id="tx-date"
+              type="date"
+              className="input"
+              value={purchaseDate}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              disabled={isEditing && isGroup && scope !== "single"}
+            />
+          </Field>
+          {isCredit && (
+            <Field label={effectiveMode === "installments" ? "Fatura da 1ª parcela" : "Fatura"} htmlFor="tx-billing">
+              <input
+                id="tx-billing"
+                type="month"
+                className="input"
+                value={billingMonth}
+                onChange={(e) => setBillingOverride(e.target.value || null)}
+                disabled={isEditing && isGroup && scope !== "single"}
+              />
+            </Field>
+          )}
+        </div>
+
+        {!isEditing && (
+          <Field label="Repetição">
+            <Segmented
+              label="Repetição"
+              value={effectiveMode}
+              onChange={setMode}
+              options={
+                type === "despesa"
+                  ? [
+                      { value: "single", label: "Única" },
+                      { value: "installments", label: "Parcelada" },
+                      { value: "recurring", label: "Fixa mensal" },
+                    ]
+                  : [
+                      { value: "single", label: "Única" },
+                      { value: "recurring", label: "Fixa mensal" },
+                    ]
+              }
+            />
+          </Field>
+        )}
+
+        {!isEditing && effectiveMode === "installments" && (
+          <Field
+            label="Número de parcelas"
+            htmlFor="tx-installments"
+            hint={
+              cents > 0 &&
+              installments >= 2 &&
+              `${installments}x de ${formatMoney(perInstallment / 100)}${
+                cents % installments ? ` (última ${formatMoney((perInstallment + (cents % installments)) / 100)})` : ""
+              } · ${formatMonthShort(isCredit ? billingMonth : purchaseDate, true)} a ${formatMonthShort(
+                shiftMonth((isCredit ? billingMonth : purchaseDate).slice(0, 7), installments - 1),
+                true,
+              )}`
+            }
           >
             <input
-              type="checkbox"
-              checked={isInstallment}
-              onChange={(e) => setIsInstallment(e.target.checked)}
+              id="tx-installments"
+              type="number"
+              className="input"
+              min={2}
+              max={72}
+              value={installmentsInput}
+              onChange={(e) => setInstallmentsInput(e.target.value)}
             />
-            Compra parcelada
-          </label>
-        </div>
-      )}
-
-      {isInstallment && !editingTransaction && (
-        <Field label="Número de parcelas" style={{ marginBottom: 12 }}>
-          <input
-            type="number"
-            min={2}
-            max={48}
-            value={installments}
-            onChange={(e) => setInstallments(e.target.value)}
-            style={inputStyle}
-          />
-          {amount && Number(installments) >= 2 && (
-            <p style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
-              {installments}x de{" "}
-              {(
-                parseFloat(amount.replace(",", ".")) / Number(installments)
-              ).toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
-            </p>
-          )}
-        </Field>
-      )}
-
-      {isEditingInstallment && (
-        <div
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            marginBottom: 12,
-            fontSize: 12,
-            background: "#FEF3C7",
-            color: "#92400E",
-          }}
-        >
-          Esta é a parcela {editingTransaction?.installment_number}/
-          {editingTransaction?.installment_total} de uma compra parcelada. A
-          edição afeta só esta parcela.
-        </div>
-      )}
-
-      <Field label="Categoria" style={{ marginBottom: 12 }}>
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(Number(e.target.value))}
-          style={inputStyle}
-        >
-          {filteredCategories.length === 0 && (
-            <option value="">Nenhuma categoria</option>
-          )}
-          {filteredCategories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Descrição" style={{ marginBottom: 16 }}>
-        <input
-          type="text"
-          placeholder="Ex: Mercado mensal"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={inputStyle}
-        />
-      </Field>
-
-      {feedback && (
-        <div
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            marginBottom: 12,
-            fontSize: 13,
-            background: "#FEE2E2",
-            color: "#991B1B",
-          }}
-        >
-          {feedback.message}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <button
-          type="submit"
-          disabled={saving}
-          style={{
-            flex: 1,
-            padding: "12px 0",
-            borderRadius: 8,
-            border: "none",
-            background: "#7C3AED",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: saving ? "not-allowed" : "pointer",
-            opacity: saving ? 0.7 : 1,
-          }}
-        >
-          {saving
-            ? "Salvando..."
-            : editingTransaction
-              ? "Salvar Alterações"
-              : isInstallment
-                ? "Criar Parcelamento"
-                : "Confirmar Lançamento"}
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              padding: "12px 16px",
-              borderRadius: 8,
-              border: "1px solid #DDD",
-              background: "#fff",
-              color: "#555",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
-            Cancelar
-          </button>
+          </Field>
         )}
+
+        {!isEditing && effectiveMode === "recurring" && (
+          <Field
+            label="Repetir por quantos meses"
+            htmlFor="tx-repeat"
+            hint={
+              cents > 0 &&
+              repeatMonths >= 2 &&
+              `${repeatMonths} lançamentos de ${formatMoney(cents / 100)}, de ${formatMonthShort(
+                isCredit ? billingMonth : purchaseDate,
+                true,
+              )} a ${formatMonthShort(shiftMonth((isCredit ? billingMonth : purchaseDate).slice(0, 7), repeatMonths - 1), true)}`
+            }
+          >
+            <input
+              id="tx-repeat"
+              type="number"
+              className="input"
+              min={2}
+              max={60}
+              value={repeatInput}
+              onChange={(e) => setRepeatInput(e.target.value)}
+            />
+          </Field>
+        )}
+
+        {isEditing && isGroup && (
+          <Field
+            label={
+              editing?.installment_group_id
+                ? `Parcela ${editing.installment_number}/${editing.installment_total} — aplicar em`
+                : "Lançamento fixo mensal — aplicar em"
+            }
+            hint={scope !== "single" ? "Em lote, a data de cada mês é mantida." : undefined}
+          >
+            <Segmented
+              label="Aplicar em"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: "single", label: "Só este" },
+                { value: "future", label: "Este e próximos" },
+                { value: "all", label: "Todos" },
+              ]}
+            />
+          </Field>
+        )}
+
+        {isCredit && !isEditing && !getCardClosingDay() && (
+          <div className="alert alert-info">
+            <IconInfo size={16} />
+            <span>Dica: informe o dia de fechamento do cartão no Perfil para a fatura ser sugerida automaticamente.</span>
+          </div>
+        )}
+
+        <FormError message={error} />
       </div>
-    </form>
+    </Modal>
   );
 }
-
-function Field({
-  label,
-  children,
-  style,
-}: {
-  label: string;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div style={style}>
-      <label
-        style={{
-          fontSize: 12,
-          color: "#555",
-          fontWeight: 600,
-          display: "block",
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  borderRadius: 8,
-  border: "1px solid #DDD",
-  fontSize: 13,
-  color: "#1A1A1A",
-  outline: "none",
-};

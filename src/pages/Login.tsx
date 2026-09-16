@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { getErrorMessage } from "../services/api";
+import { AuthLayout, PasswordInput } from "../components/AuthLayout";
+import { Field, FormError } from "../components/ui/Form";
+import { IconInfo } from "../components/ui/Icons";
 
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,185 +23,47 @@ export function Login() {
       await login(email, password);
       navigate("/");
     } catch (err) {
-      setError("E-mail ou senha inválidos.");
-    } finally {
+      setError(getErrorMessage(err, "Não foi possível entrar."));
       setLoading(false);
     }
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#F7F8FA",
-        fontFamily: "Inter, system-ui, sans-serif",
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          background: "#fff",
-          borderRadius: 16,
-          padding: 32,
-          width: "100%",
-          maxWidth: 380,
-          border: "1px solid #EEE",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
-        }}
-      >
-        <div
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 20,
-            marginBottom: 20,
-          }}
-        >
-          $
-        </div>
+    <AuthLayout>
+      <h1>Entrar</h1>
+      <p className="page-subtitle">Acesse seu controle financeiro.</p>
 
-        <div
-          style={{
-            color: "#7C3AED",
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: 1,
-            marginBottom: 4,
-          }}
-        >
-          ACESSAR CONTA
-        </div>
-        <h1
-          style={{ fontSize: 26, fontWeight: 800, color: "#1A1A1A", margin: 0 }}
-        >
-          Entrar
-        </h1>
-        <p
-          style={{
-            color: "#888",
-            fontSize: 14,
-            marginTop: 6,
-            marginBottom: 24,
-          }}
-        >
-          Acesse seu controle financeiro.
-        </p>
-
-        <Field label="E-mail" style={{ marginBottom: 14 }}>
+      <form className="form-stack" onSubmit={handleSubmit}>
+        {params.get("expirada") && (
+          <div className="alert alert-info">
+            <IconInfo size={16} />
+            <span>Sua sessão expirou. Entre novamente.</span>
+          </div>
+        )}
+        <Field label="E-mail" htmlFor="email">
           <input
+            id="email"
+            className="input"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={inputStyle}
+            autoFocus
           />
         </Field>
-
-        <Field label="Senha" style={{ marginBottom: 20 }}>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={inputStyle}
-          />
+        <Field label="Senha" htmlFor="password">
+          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="current-password" />
         </Field>
-
-        {error && (
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: 8,
-              marginBottom: 16,
-              fontSize: 13,
-              background: "#FEE2E2",
-              color: "#991B1B",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "13px 0",
-            borderRadius: 10,
-            border: "none",
-            background: "#1A1A1A",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? "Entrando..." : "Entrar"}
+        <FormError message={error} />
+        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+          {loading ? <span className="spinner" /> : "Entrar"}
         </button>
-
-        <div style={{ marginTop: 18, textAlign: "center", fontSize: 13 }}>
-          <span style={{ color: "#999" }}>Não tem conta? </span>
-          <Link
-            to="/cadastro"
-            style={{
-              color: "#7C3AED",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Criar conta
-          </Link>
-        </div>
       </form>
-    </div>
+
+      <p className="auth-switch">
+        Não tem conta? <Link to="/cadastro" className="link-btn">Criar conta</Link>
+      </p>
+    </AuthLayout>
   );
 }
-
-function Field({
-  label,
-  children,
-  style,
-}: {
-  label: string;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div style={style}>
-      <label
-        style={{
-          fontSize: 12,
-          color: "#555",
-          fontWeight: 600,
-          display: "block",
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 12px",
-  borderRadius: 8,
-  border: "1px solid #DDD",
-  fontSize: 14,
-  color: "#1A1A1A",
-  outline: "none",
-};

@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { getErrorMessage } from "../services/api";
+import { AuthLayout, PasswordInput } from "../components/AuthLayout";
+import { Field, FormError } from "../components/ui/Form";
 
 export function Register() {
   const { register } = useAuth();
@@ -14,206 +17,58 @@ export function Register() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (password.length < 6) return setError("A senha precisa ter pelo menos 6 caracteres.");
     setLoading(true);
     try {
       await register(name, email, password);
       navigate("/");
     } catch (err) {
-      const message =
-        err instanceof Error && "response" in err
-          ? (err as { response?: { data?: { message?: string } } }).response
-              ?.data?.message
-          : undefined;
-      setError(message || "Erro ao criar conta.");
-    } finally {
+      setError(getErrorMessage(err, "Não foi possível criar a conta."));
       setLoading(false);
     }
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#F7F8FA",
-        fontFamily: "Inter, system-ui, sans-serif",
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          background: "#fff",
-          borderRadius: 16,
-          padding: 32,
-          width: "100%",
-          maxWidth: 380,
-          border: "1px solid #EEE",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
-        }}
-      >
-        <div
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 20,
-            marginBottom: 20,
-          }}
-        >
-          $
-        </div>
+    <AuthLayout>
+      <h1>Criar conta</h1>
+      <p className="page-subtitle">Comece a controlar suas finanças em poucos minutos.</p>
 
-        <div
-          style={{
-            color: "#7C3AED",
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: 1,
-            marginBottom: 4,
-          }}
-        >
-          CRIAR CONTA
-        </div>
-        <h1
-          style={{ fontSize: 26, fontWeight: 800, color: "#1A1A1A", margin: 0 }}
-        >
-          Cadastro
-        </h1>
-        <p
-          style={{
-            color: "#888",
-            fontSize: 14,
-            marginTop: 6,
-            marginBottom: 24,
-          }}
-        >
-          Comece a controlar suas finanças.
-        </p>
-
-        <Field label="Nome" style={{ marginBottom: 14 }}>
+      <form className="form-stack" onSubmit={handleSubmit}>
+        <Field label="Nome" htmlFor="name">
           <input
-            type="text"
+            id="name"
+            className="input"
+            autoComplete="name"
             value={name}
+            maxLength={100}
             onChange={(e) => setName(e.target.value)}
             required
-            style={inputStyle}
+            autoFocus
           />
         </Field>
-
-        <Field label="E-mail" style={{ marginBottom: 14 }}>
+        <Field label="E-mail" htmlFor="email">
           <input
+            id="email"
+            className="input"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={inputStyle}
           />
         </Field>
-
-        <Field label="Senha" style={{ marginBottom: 20 }}>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            style={inputStyle}
-          />
+        <Field label="Senha" htmlFor="password" hint="Mínimo de 6 caracteres">
+          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={6} />
         </Field>
-
-        {error && (
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: 8,
-              marginBottom: 16,
-              fontSize: 13,
-              background: "#FEE2E2",
-              color: "#991B1B",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "13px 0",
-            borderRadius: 10,
-            border: "none",
-            background: "#7C3AED",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? "Criando conta..." : "Criar conta"}
+        <FormError message={error} />
+        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+          {loading ? <span className="spinner" /> : "Criar conta"}
         </button>
-
-        <div style={{ marginTop: 18, textAlign: "center", fontSize: 13 }}>
-          <span style={{ color: "#999" }}>Já tem conta? </span>
-          <Link
-            to="/login"
-            style={{
-              color: "#7C3AED",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Entrar
-          </Link>
-        </div>
       </form>
-    </div>
+
+      <p className="auth-switch">
+        Já tem conta? <Link to="/login" className="link-btn">Entrar</Link>
+      </p>
+    </AuthLayout>
   );
 }
-
-function Field({
-  label,
-  children,
-  style,
-}: {
-  label: string;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div style={style}>
-      <label
-        style={{
-          fontSize: 12,
-          color: "#555",
-          fontWeight: 600,
-          display: "block",
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 12px",
-  borderRadius: 8,
-  border: "1px solid #DDD",
-  fontSize: 14,
-  color: "#1A1A1A",
-  outline: "none",
-};

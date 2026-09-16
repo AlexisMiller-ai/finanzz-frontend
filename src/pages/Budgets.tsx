@@ -1,419 +1,340 @@
-import { useEffect, useState } from "react";
-import { api } from "../services/api";
-import type { Category } from "../types";
-import { formatMonthLabel, shiftMonth, getCurrentMonth } from "../utils/date";
+import { useState } from "react";
+import { api, getErrorMessage } from "../services/api";
+import { useApp } from "../contexts/AppContext";
+import { useToast } from "../contexts/ToastContext";
+import { useFetch } from "../hooks/useFetch";
+import type { Budget, Category, DistributionItem } from "../types";
+import { formatMonthLabel, shiftMonth } from "../utils/date";
+import { budgetTone } from "../utils/format";
+import { formatMoney, formatPercent, numberToCents } from "../utils/money";
+import { ChoiceDialog, Modal } from "../components/Modal";
+import { EmptyState, MonthSwitcher, ProgressBar, Skeleton } from "../components/ui/Common";
+import { Field, FormError, MoneyInput } from "../components/ui/Form";
+import { IconAlert, IconCheck, IconCopy, IconEdit, IconPlus, IconTarget, IconTrash } from "../components/ui/Icons";
 
-interface BudgetItem {
-  id: number;
-  categoryId: number;
-  categoryName: string;
-  color: string;
-  limitAmount: number;
-  spent: number;
-  remaining: number;
-  percentageUsed: number;
-}
-
-function IconTrash() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M3 6h18" />
-      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    </svg>
-  );
-}
+type BudgetDraft = { categoryId: number | null; limit: number; budgetId?: number };
 
 export function Budgets() {
-  const [month, setMonth] = useState(getCurrentMonth);
-  const [budgets, setBudgets] = useState<BudgetItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { month, notifyDataChanged } = useApp();
+  const toast = useToast();
+  const previousMonth = shiftMonth(month, -1);
+  const budgets = useFetch<Budget[]>(`/budgets?month=${month}`);
+  const previous = useFetch<Budget[]>(`/budgets?month=${previousMonth}`);
+  const distribution = useFetch<DistributionItem[]>(`/dashboard/distribution?month=${month}`);
+  const { data: categories = [] } = useFetch<Category[]>("/categories");
 
-  const [categoryId, setCategoryId] = useState<number | "">("");
-  const [limitAmount, setLimitAmount] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const [draft, setDraft] = useState<BudgetDraft | null>(null);
+  const [deleting, setDeleting] = useState<Budget | null>(null);
+  const [copying, setCopying] = useState(false);
 
-  async function loadData() {
-    setLoading(true);
+  const list = budgets.data ?? [];
+  const budgetedIds = new Set(list.map((b) => b.categoryId));
+  const unbudgeted = (distribution.data ?? []).filter((d) => d.categoryId === null || !budgetedIds.has(d.categoryId));
+
+  const totalLimit = list.reduce((acc, b) => acc + b.limitAmount, 0);
+  const totalSpent = list.reduce((acc, b) => acc + b.spent, 0);
+  const outsideSpent = unbudgeted.reduce((acc, d) => acc + d.total, 0);
+  const missingFromPrevious = (previous.data ?? []).filter((b) => !budgetedIds.has(b.categoryId)).length;
+
+  async function copyPrevious() {
+    setCopying(true);
     try {
-      const [budgetsRes, categoriesRes] = await Promise.all([
-        api.get<BudgetItem[]>(`/budgets?month=${month}`),
-        api.get<Category[]>("/categories"),
-      ]);
-      setBudgets(budgetsRes.data);
-      setCategories(categoriesRes.data.filter((c) => c.type === "despesa"));
-    } catch (error) {
-      console.error(error);
+      const res = await api.post<{ copied: number }>("/budgets/copy", { from_month: previousMonth, to_month: month });
+      toast(res.data.copied > 0 ? `${res.data.copied} orçamentos copiados` : "Nenhum orçamento novo para copiar");
+      notifyDataChanged();
+    } catch (err) {
+      toast(getErrorMessage(err), "error");
     } finally {
-      setLoading(false);
+      setCopying(false);
     }
   }
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+  const copyButton = missingFromPrevious > 0 && (
+    <button className="btn btn-secondary" onClick={copyPrevious} disabled={copying}>
+      <IconCopy size={16} /> Copiar de {formatMonthLabel(previousMonth).split(" ")[0]?.toLowerCase()} ({missingFromPrevious})
+    </button>
+  );
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Orçamentos</h1>
+          <p className="page-subtitle">Limites de gasto por categoria em {formatMonthLabel(month).toLowerCase()}</p>
+        </div>
+        <div className="page-actions">
+          <MonthSwitcher />
+          <button className="btn btn-primary" onClick={() => setDraft({ categoryId: null, limit: 0 })}>
+            <IconPlus size={16} /> Novo orçamento
+          </button>
+        </div>
+      </div>
+
+      {budgets.error && !budgets.data ? (
+        <div className="card">
+          <EmptyState
+            icon={<IconAlert />}
+            title="Não foi possível carregar os orçamentos"
+            description={budgets.error}
+            action={<button className="btn btn-secondary" onClick={budgets.reload}>Tentar novamente</button>}
+          />
+        </div>
+      ) : !budgets.data ? (
+        <div className="card">
+          <Skeleton height={200} />
+        </div>
+      ) : list.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={<IconTarget />}
+            title="Nenhum orçamento neste mês"
+            description="Defina quanto quer gastar em cada categoria e acompanhe o progresso ao longo do mês."
+            action={
+              <div className="page-actions" style={{ justifyContent: "center", marginTop: 8 }}>
+                {copyButton}
+                <button className="btn btn-primary" onClick={() => setDraft({ categoryId: null, limit: 0 })}>
+                  <IconPlus size={16} /> Criar orçamento
+                </button>
+              </div>
+            }
+          />
+        </div>
+      ) : (
+        <>
+          <div className="stat-strip">
+            <div>
+              <div className="stat-strip-label">Orçado</div>
+              <div className="stat-strip-value">{formatMoney(totalLimit)}</div>
+            </div>
+            <div>
+              <div className="stat-strip-label">Gasto</div>
+              <div className="stat-strip-value">{formatMoney(totalSpent)}</div>
+            </div>
+            <div>
+              <div className="stat-strip-label">{totalLimit - totalSpent >= 0 ? "Restante" : "Acima do orçado"}</div>
+              <div className={`stat-strip-value ${totalLimit - totalSpent < 0 ? "text-out" : "text-in"}`}>
+                {formatMoney(Math.abs(totalLimit - totalSpent))}
+              </div>
+            </div>
+            <div>
+              <div className="stat-strip-label">Fora dos orçamentos</div>
+              <div className="stat-strip-value">{formatMoney(outsideSpent)}</div>
+            </div>
+          </div>
+
+          {copyButton && <div>{copyButton}</div>}
+
+          <div className="grid grid-main" style={{ alignItems: "start" }}>
+            <div className="card card-flush">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Categorias com orçamento</h2>
+                  <p className="card-subtitle">{list.length} {list.length === 1 ? "orçamento" : "orçamentos"}</p>
+                </div>
+              </div>
+              <div className="list" style={{ paddingBottom: 6 }}>
+                {[...list]
+                  .sort((a, b) => b.percentageUsed - a.percentageUsed)
+                  .map((b) => {
+                    const tone = budgetTone(b.percentageUsed);
+                    return (
+                      <div key={b.id} className="list-row" style={{ alignItems: "flex-start" }}>
+                        <span className="dot" style={{ background: b.color, marginTop: 5 }} />
+                        <div className="row-main">
+                          <div className="category-bar-top">
+                            <span className="row-title">{b.categoryName}</span>
+                            <span className="nowrap tabular">
+                              <strong>{formatMoney(b.spent)}</strong>{" "}
+                              <span className="muted">/ {formatMoney(b.limitAmount)}</span>
+                            </span>
+                          </div>
+                          <ProgressBar percent={b.percentageUsed} tone={tone} />
+                          <div className="row-meta" style={{ justifyContent: "space-between", marginTop: 6 }}>
+                            <span>
+                              {b.remaining >= 0
+                                ? `Restam ${formatMoney(b.remaining)}`
+                                : `Passou ${formatMoney(Math.abs(b.remaining))}`}
+                            </span>
+                            <span className={`badge ${tone === "bad" ? "badge-out" : tone === "warning" ? "badge-warning" : "badge-in"}`}>
+                              {tone === "good" ? <IconCheck size={11} /> : <IconAlert size={11} />}
+                              {formatPercent(b.percentageUsed)}
+                              {tone === "bad" ? " · estourou" : tone === "warning" ? " · atenção" : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="row-actions" style={{ display: "flex" }}>
+                          <button
+                            className="btn btn-icon"
+                            onClick={() => setDraft({ categoryId: b.categoryId, limit: b.limitAmount, budgetId: b.id })}
+                            aria-label={`Editar orçamento de ${b.categoryName}`}
+                          >
+                            <IconEdit size={16} />
+                          </button>
+                          <button
+                            className="btn btn-icon danger"
+                            onClick={() => setDeleting(b)}
+                            aria-label={`Excluir orçamento de ${b.categoryName}`}
+                          >
+                            <IconTrash size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            <div className="card card-flush">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title">Gastos sem orçamento</h2>
+                  <p className="card-subtitle">Categorias com saídas e sem limite definido</p>
+                </div>
+              </div>
+              {unbudgeted.length === 0 ? (
+                <EmptyState icon={<IconCheck />} title="Tudo coberto" description="Todos os gastos do mês têm orçamento." />
+              ) : (
+                <div className="list" style={{ paddingBottom: 6 }}>
+                  {unbudgeted.map((d) => (
+                    <div key={d.categoryId ?? "none"} className="list-row">
+                      <span className="dot" style={{ background: d.color }} />
+                      <div className="row-main">
+                        <div className="row-title">{d.name}</div>
+                        <div className="row-meta">{formatMoney(d.total)} gastos</div>
+                      </div>
+                      {d.categoryId !== null && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setDraft({ categoryId: d.categoryId, limit: Math.ceil(d.total) })}
+                        >
+                          Definir limite
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {draft && (
+        <BudgetModal
+          draft={draft}
+          month={month}
+          categories={categories.filter((c) => c.type === "despesa" && (c.id === draft.categoryId || !budgetedIds.has(c.id)))}
+          onClose={() => setDraft(null)}
+        />
+      )}
+      {deleting && <DeleteBudgetDialog budget={deleting} onClose={() => setDeleting(null)} />}
+    </div>
+  );
+}
+
+function BudgetModal({
+  draft,
+  month,
+  categories,
+  onClose,
+}: {
+  draft: BudgetDraft;
+  month: string;
+  categories: Category[];
+  onClose: () => void;
+}) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [categoryId, setCategoryId] = useState<number | "">(draft.categoryId ?? "");
+  const [cents, setCents] = useState(numberToCents(draft.limit));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isEditing = !!draft.budgetId;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setFeedback(null);
-
-    if (!categoryId || !limitAmount) {
-      setFeedback({
-        type: "error",
-        message: "Selecione uma categoria e informe o limite.",
-      });
-      return;
-    }
-
+    if (!categoryId) return setError("Escolha uma categoria.");
+    if (cents <= 0) return setError("Informe um limite maior que zero.");
     setSaving(true);
+    setError(null);
     try {
-      await api.post("/budgets", {
-        category_id: categoryId,
-        month_ref: `${month}-01`,
-        limit_amount: parseFloat(limitAmount.replace(",", ".")),
-      });
-      setFeedback({ type: "success", message: "Meta definida com sucesso!" });
-      setLimitAmount("");
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      setFeedback({ type: "error", message: "Erro ao salvar meta." });
-    } finally {
+      await api.post("/budgets", { category_id: categoryId, month_ref: `${month}-01`, limit_amount: cents / 100 });
+      toast(isEditing ? "Orçamento atualizado" : "Orçamento criado");
+      notifyDataChanged();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
       setSaving(false);
     }
   }
 
-  async function handleDelete(id: number) {
-    await api.delete(`/budgets/${id}`);
-    await loadData();
+  return (
+    <Modal
+      title={isEditing ? "Editar orçamento" : "Novo orçamento"}
+      description={formatMonthLabel(month)}
+      onClose={onClose}
+      size="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <span className="spinner" /> : "Salvar"}
+        </button>
+      }
+    >
+      <div className="form-stack">
+        <Field label="Categoria" htmlFor="budget-category">
+          <select
+            id="budget-category"
+            className="select"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}
+            disabled={isEditing}
+          >
+            <option value="">Selecione...</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {categories.length === 0 && !isEditing && (
+          <div className="alert alert-info">Todas as categorias de despesa já têm orçamento neste mês.</div>
+        )}
+        <Field label="Limite mensal" htmlFor="budget-limit">
+          <MoneyInput id="budget-limit" cents={cents} onChange={setCents} large autoFocus={isEditing || !!draft.categoryId} />
+        </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteBudgetDialog({ budget, onClose }: { budget: Budget; onClose: () => void }) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handleDelete() {
+    setBusy(true);
+    try {
+      await api.delete(`/budgets/${budget.id}`);
+      toast("Orçamento excluído");
+      notifyDataChanged();
+      onClose();
+    } catch (err) {
+      toast(getErrorMessage(err), "error");
+      setBusy(false);
+    }
   }
 
-  const formatMoney = (value: number) =>
-    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const categoriesWithoutBudget = categories.filter(
-    (c) => !budgets.some((b) => b.categoryId === c.id),
-  );
-
   return (
-    <div style={{ maxWidth: 1000 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button
-            onClick={() => setMonth((m) => shiftMonth(m, -1))}
-            style={navButtonStyle}
-          >
-            ‹
-          </button>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 20,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              textTransform: "capitalize",
-            }}
-          >
-            {formatMonthLabel(month)}
-          </h2>
-          <button
-            onClick={() => setMonth((m) => shiftMonth(m, 1))}
-            style={navButtonStyle}
-          >
-            ›
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1.3fr",
-          gap: 20,
-          alignItems: "flex-start",
-        }}
-      >
-        <form
-          onSubmit={handleSubmit}
-          style={{ ...cardStyle, position: "sticky", top: 20 }}
-        >
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 15,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
-          >
-            Definir Meta
-          </h3>
-
-          <Field label="Categoria" style={{ marginBottom: 12 }}>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(Number(e.target.value))}
-              style={inputStyle}
-            >
-              <option value="">Selecione...</option>
-              {categoriesWithoutBudget.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-              {categoriesWithoutBudget.length === 0 && (
-                <option value="" disabled>
-                  Todas as categorias já têm meta
-                </option>
-              )}
-            </select>
-          </Field>
-
-          <Field label="Limite mensal (R$)" style={{ marginBottom: 16 }}>
-            <input
-              type="text"
-              placeholder="0,00"
-              value={limitAmount}
-              onChange={(e) => setLimitAmount(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-
-          {feedback && (
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: 8,
-                marginBottom: 12,
-                fontSize: 13,
-                background: feedback.type === "success" ? "#DCFCE7" : "#FEE2E2",
-                color: feedback.type === "success" ? "#166534" : "#991B1B",
-              }}
-            >
-              {feedback.message}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving}
-            style={{
-              width: "100%",
-              padding: "12px 0",
-              borderRadius: 8,
-              border: "none",
-              background: "#7C3AED",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: saving ? "not-allowed" : "pointer",
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            {saving ? "Salvando..." : "Definir Meta"}
-          </button>
-        </form>
-
-        <div style={cardStyle}>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 15,
-              color: "#1A1A1A",
-              marginBottom: 16,
-            }}
-          >
-            Metas do mês ({budgets.length})
-          </h3>
-
-          {loading ? (
-            <p style={{ color: "#999", fontSize: 13 }}>Carregando...</p>
-          ) : budgets.length === 0 ? (
-            <p style={{ color: "#999", fontSize: 13 }}>
-              Nenhuma meta definida neste mês.
-            </p>
-          ) : (
-            budgets.map((b) => {
-              const overBudget = b.percentageUsed > 100;
-              const barColor = overBudget
-                ? "#DC2626"
-                : b.percentageUsed > 80
-                  ? "#F59E0B"
-                  : "#16A34A";
-
-              return (
-                <div
-                  key={b.id}
-                  style={{
-                    padding: "14px 0",
-                    borderBottom: "1px solid #F3F3F3",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span
-                        style={{
-                          width: 9,
-                          height: 9,
-                          borderRadius: "50%",
-                          background: b.color,
-                          display: "inline-block",
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 14,
-                          color: "#1A1A1A",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {b.categoryName}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleDelete(b.id)}
-                      style={iconButtonStyle}
-                      title="Excluir meta"
-                    >
-                      <IconTrash />
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      height: 8,
-                      borderRadius: 4,
-                      background: "#F0F0F0",
-                      overflow: "hidden",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${Math.min(b.percentageUsed, 100)}%`,
-                        background: barColor,
-                        borderRadius: 4,
-                        transition: "width 0.3s",
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 12,
-                      color: "#888",
-                    }}
-                  >
-                    <span>
-                      {formatMoney(b.spent)} de {formatMoney(b.limitAmount)}
-                    </span>
-                    <span style={{ color: barColor, fontWeight: 700 }}>
-                      {b.percentageUsed}% {overBudget && "(estourou!)"}
-                    </span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </div>
+    <ChoiceDialog
+      title={`Excluir orçamento de ${budget.categoryName}?`}
+      description="Os lançamentos não são afetados, só o limite deste mês."
+      busy={busy}
+      onClose={onClose}
+      options={[{ label: "Excluir", variant: "danger", onSelect: handleDelete }]}
+    />
   );
 }
-
-function Field({
-  label,
-  children,
-  style,
-}: {
-  label: string;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div style={style}>
-      <label
-        style={{
-          fontSize: 12,
-          color: "#555",
-          fontWeight: 600,
-          display: "block",
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const cardStyle: React.CSSProperties = {
-  background: "#fff",
-  borderRadius: 16,
-  padding: 20,
-  border: "1px solid #EEE",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  borderRadius: 8,
-  border: "1px solid #DDD",
-  fontSize: 13,
-  color: "#1A1A1A",
-  outline: "none",
-};
-
-const navButtonStyle: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 8,
-  border: "1px solid #DDD",
-  background: "#fff",
-  cursor: "pointer",
-  fontSize: 16,
-  color: "#555",
-};
-
-const iconButtonStyle: React.CSSProperties = {
-  border: "none",
-  background: "transparent",
-  color: "#888",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  padding: 4,
-};
