@@ -1,75 +1,43 @@
-# React + TypeScript + Vite
+# Finanzz — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Controle de finanças pessoais: lançamentos, cartão de crédito, compras parceladas, lançamentos fixos, orçamentos por categoria e meta de economia.
 
-Currently, two official plugins are available:
+React 19 + TypeScript + Vite, React Router e Recharts. Consome a API do `finanzz-backend`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Rodando
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+A URL da API vem de `VITE_API_URL` (`.env`). Para usar um backend local, crie `.env.development.local` com `VITE_API_URL=http://localhost:3333`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Estrutura
 
 ```
+src/
+  components/
+    ui/              Ícones, campos (MoneyInput, Segmented...), estados vazios, barra de progresso
+    Layout.tsx       Sidebar (desktop), barra inferior com botão "+" (mobile), modal global de novo lançamento
+    Modal.tsx        Modal acessível + ChoiceDialog (confirmações com várias opções)
+    TransactionForm.tsx
+  contexts/
+    AuthContext      Sessão do usuário
+    AppContext       Mês selecionado (compartilhado entre telas), tema, dataVersion e modal de novo lançamento
+    ToastContext     Notificações
+  hooks/
+    useFetch         GET com recarga automática quando algum dado é salvo (dataVersion)
+    useThemeColors   Lê tokens CSS para os gráficos
+  pages/             Dashboard, Lançamentos, Orçamentos, Categorias, Perfil, Login, Cadastro
+  utils/             Datas, dinheiro, preferências locais
+  index.css          Design system (tokens claro/escuro, componentes, responsivo)
+```
+
+## Conceitos
+
+- **Valores** são digitados com máscara de centavos (`123456` → `1.234,56`) e enviados como número.
+- **Cartão de crédito**: `date` é o 1º dia do mês da fatura e `purchase_date` a data real da compra. Com o dia de fechamento configurado no Perfil, a fatura é sugerida automaticamente.
+- **Parcelada** divide o total em N lançamentos mensais; **Fixa mensal** repete o mesmo valor por N meses. Edição e exclusão podem valer para "só este", "este e os próximos" ou "todos".
+- **Mês selecionado** fica salvo na sessão e vale para todas as telas.
+- Atalho: tecla **N** abre um novo lançamento.

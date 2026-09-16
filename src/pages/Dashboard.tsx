@@ -1,917 +1,682 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { api, getErrorMessage } from "../services/api";
+import { useApp } from "../contexts/AppContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useToast } from "../contexts/ToastContext";
+import { useFetch } from "../hooks/useFetch";
+import { useThemeColors } from "../hooks/useThemeColors";
+import type { Budget, DashboardSummary, DistributionItem, EvolutionPoint, Transaction } from "../types";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
-import { api } from "../services/api";
-import type {
-  DashboardSummary,
-  DistributionItem,
-  Transaction,
-  Category,
-} from "../types";
-import {
+  formatDate,
   formatMonthLabel,
   formatMonthShort,
-  shiftMonth,
-  getLastNMonths,
   getCurrentMonth,
+  getGreeting,
+  remainingDaysInMonth,
+  shiftMonth,
 } from "../utils/date";
+import { budgetTone } from "../utils/format";
+import { formatAxisValue, formatMoney, formatPercent, formatSignedMoney, numberToCents } from "../utils/money";
 import { Modal } from "../components/Modal";
-import { TransactionForm } from "../components/TransactionForm";
-
-function IconTrend() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M3 17l6-6 4 4 8-8" />
-      <path d="M14 7h7v7" />
-    </svg>
-  );
-}
-
-function IconCard() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <rect x="2" y="5" width="20" height="14" rx="2" />
-      <path d="M2 10h20" />
-    </svg>
-  );
-}
-
-function IconDown() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M3 7l6 6 4-4 8 8" />
-      <path d="M14 17h7v-7" />
-    </svg>
-  );
-}
-
-function IconPiggy() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M19 9a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1h-1v1a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-2a5 5 0 0 1 5-5h6a4 4 0 0 1 3 1.5" />
-      <circle cx="8" cy="13" r="0.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconTarget() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="5" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconEdit() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  );
-}
+import { TransactionFormModal } from "../components/TransactionForm";
+import { CategoryIcon, EmptyState, MonthSwitcher, ProgressBar, Skeleton } from "../components/ui/Common";
+import { Field, FormError, MoneyInput } from "../components/ui/Form";
+import {
+  IconAlert,
+  IconArrowDown,
+  IconArrowUp,
+  IconCard,
+  IconEdit,
+  IconList,
+  IconPercent,
+  IconPiggy,
+  IconTarget,
+  IconWallet,
+} from "../components/ui/Icons";
 
 export function Dashboard() {
-  const navigate = useNavigate();
-  const [month, setMonth] = useState(getCurrentMonth);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [distribution, setDistribution] = useState<DistributionItem[]>([]);
-  const [evolution, setEvolution] = useState<
-    { month: string; entradas: number; saidas: number }[]
-  >([]);
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
-    [],
-  );
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showGoalModal, setShowGoalModal] = useState(false);
-  const [goalInput, setGoalInput] = useState("");
-  const [savingGoal, setSavingGoal] = useState(false);
-  const [showSavingsModal, setShowSavingsModal] = useState(false);
-  const [savingsInput, setSavingsInput] = useState("");
-  const [savingSavings, setSavingSavings] = useState(false);
+  const { month } = useApp();
+  const { user } = useAuth();
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [savingsOpen, setSavingsOpen] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [summaryRes, distributionRes, transactionsRes, categoriesRes] =
-        await Promise.all([
-          api.get<DashboardSummary>(`/dashboard/summary?month=${month}`),
-          api.get<DistributionItem[]>(`/dashboard/distribution?month=${month}`),
-          api.get<Transaction[]>(`/transactions?month=${month}`),
-          api.get<Category[]>("/categories"),
-        ]);
+  const summary = useFetch<DashboardSummary>(`/dashboard/summary?month=${month}`);
+  const evolution = useFetch<EvolutionPoint[]>(`/dashboard/evolution?from=${shiftMonth(month, -5)}&months=6`);
+  const upcoming = useFetch<EvolutionPoint[]>(`/dashboard/evolution?from=${shiftMonth(month, 1)}&months=3`);
+  const distribution = useFetch<DistributionItem[]>(`/dashboard/distribution?month=${month}`);
+  const budgets = useFetch<Budget[]>(`/budgets?month=${month}`);
+  const transactions = useFetch<Transaction[]>(`/transactions?month=${month}`);
 
-      setSummary(summaryRes.data);
-      setDistribution(distributionRes.data);
-      setRecentTransactions(transactionsRes.data.slice(0, 5));
-      setCategories(categoriesRes.data);
-
-      const months = getLastNMonths(month, 6);
-      const evolutionData = await Promise.all(
-        months.map(async (m) => {
-          const res = await api.get<DashboardSummary>(
-            `/dashboard/summary?month=${m}`,
-          );
-          return {
-            month: formatMonthShort(m),
-            entradas: res.data.entradasPeriodo,
-            saidas: res.data.saidasPeriodo,
-          };
-        }),
-      );
-      setEvolution(evolutionData);
-    } catch (error) {
-      console.error("Erro ao carregar dashboard:", error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
-
-  const formatMoney = (value: number) =>
-    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const categoryMap = new Map(categories.map((c) => [c.id, c]));
-
-  async function handleSaveGoal(e: React.FormEvent) {
-    e.preventDefault();
-    if (!goalInput) return;
-    setSavingGoal(true);
-    try {
-      await api.post("/goals", {
-        month_ref: `${month}-01`,
-        savings_goal: parseFloat(goalInput.replace(",", ".")),
-      });
-      setShowGoalModal(false);
-      setGoalInput("");
-      loadData();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setSavingGoal(false);
-    }
-  }
-
-  async function handleSaveSavings(e: React.FormEvent) {
-    e.preventDefault();
-    if (!savingsInput) return;
-    setSavingSavings(true);
-    try {
-      await api.put("/savings", {
-        manual_total: parseFloat(savingsInput.replace(",", ".")),
-      });
-      setShowSavingsModal(false);
-      setSavingsInput("");
-      loadData();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setSavingSavings(false);
-    }
-  }
-
-  if (loading && !summary) return <div>Carregando...</div>;
-  if (!summary) return <div>Erro ao carregar dados.</div>;
+  const s = summary.data;
+  const firstName = user?.name.split(" ")[0] ?? "";
 
   return (
-    <div style={{ maxWidth: 1200 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button
-            onClick={() => setMonth((m) => shiftMonth(m, -1))}
-            style={navButtonStyle}
-          >
-            ‹
-          </button>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 20,
-              fontWeight: 700,
-              color: "#1A1A1A",
-              textTransform: "capitalize",
-            }}
-          >
-            {formatMonthLabel(month)}
-          </h2>
-          <button
-            onClick={() => setMonth((m) => shiftMonth(m, 1))}
-            style={navButtonStyle}
-          >
-            ›
-          </button>
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            {getGreeting()}, {firstName}
+          </h1>
+          <p className="page-subtitle">Resumo de {formatMonthLabel(month).toLowerCase()}</p>
         </div>
-
-        <button
-          onClick={() => setShowModal(true)}
-          style={{
-            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 10,
-            padding: "10px 18px",
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: "pointer",
-          }}
-        >
-          + Lançamento
-        </button>
+        <MonthSwitcher />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
-        }}
-      >
-        <KpiCard
-          title="SALDO DO MÊS"
-          value={summary.saldoPeriodo}
-          icon={<IconTrend />}
-          topColor="#1A1A1A"
-        />
-        <KpiCard
-          title="ENTRADAS"
-          value={summary.entradasPeriodo}
-          icon={<IconCard />}
-          topColor="#16A34A"
-          valueColor="#16A34A"
-        />
-        <KpiCard
-          title="SAÍDAS"
-          value={summary.saidasPeriodo}
-          icon={<IconDown />}
-          topColor="#DC2626"
-          valueColor="#DC2626"
-        />
-        <KpiCard
-          title="ECONOMIA"
-          value={summary.taxaEconomia}
-          icon={<IconPiggy />}
-          topColor="#16A34A"
-          isPercentage
-          subtitle={`${summary.taxaEconomia}% da renda guardada`}
-        />
-      </div>
-
-      {/* Total guardado, versão discreta, com botão de editar */}
-      <div
-        style={{
-          marginTop: 16,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          fontSize: 13,
-          color: "#888",
-          padding: "4px 4px",
-        }}
-      >
-        <span style={{ display: "flex", color: "#AAA" }}>
-          <IconPiggy />
-        </span>
-        <span>Total guardado desde Agosto/2026:</span>
-        <strong
-          style={{
-            color: summary.saldoGeralAcumulado < 0 ? "#DC2626" : "#555",
-            fontWeight: 700,
-          }}
-        >
-          {formatMoney(summary.saldoGeralAcumulado)}
-        </strong>
-        <button
-          onClick={() => {
-            setSavingsInput(String(summary.saldoGeralAcumulado));
-            setShowSavingsModal(true);
-          }}
-          title="Editar valor guardado"
-          style={{
-            border: "none",
-            background: "transparent",
-            color: "#AAA",
-            cursor: "pointer",
-            display: "flex",
-            padding: 2,
-          }}
-        >
-          <IconEdit />
-        </button>
-      </div>
-
-      {/* Card de meta de economia / disponível para gastar */}
-      <div
-        style={{
-          marginTop: 16,
-          background: "#fff",
-          borderRadius: 16,
-          padding: 20,
-          border: "1px solid #EEE",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              background: "#F3EEFF",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#7C3AED",
-            }}
-          >
-            <IconTarget />
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                color: "#999",
-                fontWeight: 700,
-                letterSpacing: 0.5,
-              }}
-            >
-              META DE ECONOMIA DO MÊS
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#1A1A1A" }}>
-              {summary.savingsGoal > 0
-                ? formatMoney(summary.savingsGoal)
-                : "Nenhuma meta definida"}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ textAlign: "right" }}>
-          <div
-            style={{
-              fontSize: 12,
-              color: "#999",
-              fontWeight: 700,
-              letterSpacing: 0.5,
-            }}
-          >
-            DISPONÍVEL PARA GASTAR
-          </div>
-          <div
-            style={{
-              fontSize: 20,
-              fontWeight: 800,
-              color: summary.availableToSpend < 0 ? "#DC2626" : "#16A34A",
-            }}
-          >
-            {formatMoney(summary.availableToSpend)}
-          </div>
-        </div>
-
-        <button
-          onClick={() => {
-            setGoalInput(
-              summary.savingsGoal > 0 ? String(summary.savingsGoal) : "",
-            );
-            setShowGoalModal(true);
-          }}
-          style={{
-            padding: "10px 16px",
-            borderRadius: 8,
-            border: "1px solid #DDD",
-            background: "#fff",
-            color: "#555",
-            fontWeight: 600,
-            fontSize: 13,
-            cursor: "pointer",
-          }}
-        >
-          {summary.savingsGoal > 0 ? "Editar meta" : "Definir meta"}
-        </button>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 16,
-          marginTop: 16,
-        }}
-      >
-        <div style={cardStyle}>
-          <h3 style={{ margin: 0, fontSize: 15, color: "#1A1A1A" }}>
-            Evolução
-          </h3>
-          <div style={{ marginTop: 16 }}>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={evolution}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 12, fill: "#999" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: "#999" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip formatter={(value) => formatMoney(Number(value))} />
-                <Line
-                  type="monotone"
-                  dataKey="entradas"
-                  stroke="#16A34A"
-                  strokeWidth={2}
-                  dot={false}
-                  name="Entradas"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="saidas"
-                  stroke="#DC2626"
-                  strokeWidth={2}
-                  dot={false}
-                  name="Saídas"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div style={cardStyle}>
-          <h3 style={{ margin: 0, fontSize: 15, color: "#1A1A1A" }}>
-            Gastos por categoria
-          </h3>
-          <div style={{ marginTop: 16 }}>
-            {distribution.length === 0 ? (
-              <p style={{ color: "#999", fontSize: 13 }}>
-                Sem saídas neste mês.
-              </p>
-            ) : (
-              distribution.map((item) => (
-                <div
-                  key={item.categoryId}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "8px 0",
-                    borderBottom: "1px solid #F3F3F3",
-                  }}
-                >
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    <span
-                      style={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: "50%",
-                        background: item.color,
-                        display: "inline-block",
-                      }}
-                    />
-                    <span style={{ fontSize: 13, color: "#333" }}>
-                      {item.name}
-                    </span>
-                  </div>
-                  <strong style={{ fontSize: 13, color: "#1A1A1A" }}>
-                    {formatMoney(item.total)}
-                  </strong>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ ...cardStyle, marginTop: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: 15, color: "#1A1A1A" }}>
-            Últimas transações
-          </h3>
-          <span
-            onClick={() => navigate("/transacoes")}
-            style={{
-              fontSize: 13,
-              color: "#7C3AED",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            Ver todas →
-          </span>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          {recentTransactions.length === 0 ? (
-            <p style={{ color: "#999", fontSize: 13 }}>
-              Nenhuma transação neste mês.
-            </p>
-          ) : (
-            recentTransactions.map((t) => {
-              const category = t.category_id
-                ? categoryMap.get(t.category_id)
-                : null;
-              return (
-                <div
-                  key={t.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "10px 0",
-                    borderBottom: "1px solid #F3F3F3",
-                  }}
-                >
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
-                  >
-                    <span
-                      style={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: "50%",
-                        background: category?.color || "#CCC",
-                        display: "inline-block",
-                      }}
-                    />
-                    <div>
-                      <div style={{ fontSize: 13, color: "#1A1A1A" }}>
-                        {t.description || category?.name || "Sem descrição"}
-                      </div>
-                      <div style={{ fontSize: 11, color: "#999" }}>
-                        {t.payment_method === "credito" && t.purchase_date
-                          ? `Comprado em ${new Date(t.purchase_date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}`
-                          : new Date(t.date).toLocaleDateString("pt-BR", {
-                              timeZone: "UTC",
-                            })}
-                      </div>
-                    </div>
-                  </div>
-                  <strong
-                    style={{
-                      fontSize: 13,
-                      color: t.type === "receita" ? "#16A34A" : "#DC2626",
-                    }}
-                  >
-                    {t.type === "receita" ? "+ " : "- "}
-                    {formatMoney(Number(t.amount))}
-                  </strong>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <TransactionForm
-            onSaved={() => {
-              setShowModal(false);
-              loadData();
-            }}
-            onCancel={() => setShowModal(false)}
+      {summary.error && !s ? (
+        <div className="card">
+          <EmptyState
+            icon={<IconAlert />}
+            title="Não foi possível carregar o dashboard"
+            description={summary.error}
+            action={
+              <button className="btn btn-secondary" onClick={summary.reload}>
+                Tentar novamente
+              </button>
+            }
           />
-        </Modal>
+        </div>
+      ) : (
+        <>
+          <KpiRow summary={s} />
+
+          <div className="grid grid-main">
+            <PlanningCard summary={s} month={month} onEditGoal={() => setGoalOpen(true)} />
+            <SavingsCard
+              summary={s}
+              upcoming={upcoming.data}
+              month={month}
+              onEdit={() => setSavingsOpen(true)}
+            />
+          </div>
+
+          <div className="grid grid-main">
+            <EvolutionCard data={evolution.data} month={month} />
+            <CategoryCard data={distribution.data} />
+          </div>
+
+          <div className="grid grid-halves">
+            <BudgetsCard data={budgets.data} />
+            <RecentCard data={transactions.data} onSelect={setEditing} />
+          </div>
+        </>
       )}
 
-      {showGoalModal && (
-        <Modal onClose={() => setShowGoalModal(false)}>
-          <form onSubmit={handleSaveGoal}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 16,
-                color: "#1A1A1A",
-                marginBottom: 16,
-              }}
-            >
-              Meta de economia — {formatMonthLabel(month)}
-            </h3>
-            <label
-              style={{
-                fontSize: 12,
-                color: "#555",
-                fontWeight: 600,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Quanto você quer guardar este mês (R$)
-            </label>
-            <input
-              type="text"
-              placeholder="0,00"
-              value={goalInput}
-              onChange={(e) => setGoalInput(e.target.value)}
-              autoFocus
-              style={{
-                width: "100%",
-                padding: "9px 12px",
-                borderRadius: 8,
-                border: "1px solid #DDD",
-                fontSize: 14,
-                color: "#1A1A1A",
-                outline: "none",
-                marginBottom: 16,
-              }}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="submit"
-                disabled={savingGoal}
-                style={{
-                  flex: 1,
-                  padding: "12px 0",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#7C3AED",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: savingGoal ? "not-allowed" : "pointer",
-                  opacity: savingGoal ? 0.7 : 1,
-                }}
-              >
-                {savingGoal ? "Salvando..." : "Salvar meta"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowGoalModal(false)}
-                style={{
-                  padding: "12px 16px",
-                  borderRadius: 8,
-                  border: "1px solid #DDD",
-                  background: "#fff",
-                  color: "#555",
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </Modal>
+      {goalOpen && s && <GoalModal month={month} current={s.savingsGoal} onClose={() => setGoalOpen(false)} />}
+      {savingsOpen && s && (
+        <SavingsModal current={s.saldoGeralAcumulado} onClose={() => setSavingsOpen(false)} />
       )}
-
-      {showSavingsModal && (
-        <Modal onClose={() => setShowSavingsModal(false)}>
-          <form onSubmit={handleSaveSavings}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 16,
-                color: "#1A1A1A",
-                marginBottom: 8,
-              }}
-            >
-              Editar total guardado
-            </h3>
-            <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-              Ajuste o valor que você realmente tem guardado. A partir de agora,
-              o total continua sendo atualizado automaticamente conforme você
-              lançar novas transações.
-            </p>
-            <label
-              style={{
-                fontSize: 12,
-                color: "#555",
-                fontWeight: 600,
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Valor total guardado (R$)
-            </label>
-            <input
-              type="text"
-              placeholder="0,00"
-              value={savingsInput}
-              onChange={(e) => setSavingsInput(e.target.value)}
-              autoFocus
-              style={{
-                width: "100%",
-                padding: "9px 12px",
-                borderRadius: 8,
-                border: "1px solid #DDD",
-                fontSize: 14,
-                color: "#1A1A1A",
-                outline: "none",
-                marginBottom: 16,
-              }}
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="submit"
-                disabled={savingSavings}
-                style={{
-                  flex: 1,
-                  padding: "12px 0",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#7C3AED",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: savingSavings ? "not-allowed" : "pointer",
-                  opacity: savingSavings ? 0.7 : 1,
-                }}
-              >
-                {savingSavings ? "Salvando..." : "Salvar"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowSavingsModal(false)}
-                style={{
-                  padding: "12px 16px",
-                  borderRadius: 8,
-                  border: "1px solid #DDD",
-                  background: "#fff",
-                  color: "#555",
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      {editing && <TransactionFormModal editing={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  icon,
-  topColor,
-  valueColor,
-  isPercentage,
-  subtitle,
-}: {
-  title: string;
-  value: number;
-  icon: React.ReactNode;
-  topColor: string;
-  valueColor?: string;
-  isPercentage?: boolean;
-  subtitle?: string;
-}) {
-  const isNegative = value < 0;
-  const displayValue = isPercentage
-    ? `${value}%`
-    : Math.abs(value).toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      });
+/* ---------------- KPIs ---------------- */
+
+function Delta({ current, previous, higherIsGood }: { current: number; previous: number; higherIsGood: boolean }) {
+  if (previous === 0) return <span>sem dados do mês anterior</span>;
+  const change = ((current - previous) / previous) * 100;
+  if (Math.abs(change) < 0.5) return <span className="delta neutral">= mês anterior</span>;
+  const good = change > 0 === higherIsGood;
+  return (
+    <>
+      <span className={`delta ${good ? "good" : "bad"}`}>
+        {change > 0 ? "↑" : "↓"} {formatPercent(Math.abs(change))}
+      </span>
+      <span>vs mês anterior</span>
+    </>
+  );
+}
+
+function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
+  if (!s) {
+    return (
+      <div className="grid grid-kpi">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="card kpi">
+            <Skeleton width={90} height={12} />
+            <Skeleton width="70%" height={26} style={{ marginTop: 8 }} />
+            <Skeleton width="60%" height={12} style={{ marginTop: 6 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: 14,
-        padding: "18px 20px",
-        borderTop: `3px solid ${topColor}`,
-        boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            color: "#999",
-            fontWeight: 700,
-            letterSpacing: 0.5,
-          }}
-        >
-          {title}
-        </span>
-        <span style={{ color: "#999", display: "flex" }}>{icon}</span>
+    <div className="grid grid-kpi">
+      <div className="card kpi">
+        <div className="kpi-top">
+          <span className="kpi-label">Saldo do mês</span>
+          <span className="kpi-icon"><IconWallet size={16} /></span>
+        </div>
+        <div className={`kpi-value ${s.saldoPeriodo < 0 ? "text-out" : ""}`}>{formatMoney(s.saldoPeriodo)}</div>
+        <div className="kpi-foot">
+          {s.quantidadeLancamentos} {s.quantidadeLancamentos === 1 ? "lançamento" : "lançamentos"}
+        </div>
       </div>
-      <div
-        style={{
-          fontSize: 22,
-          fontWeight: 800,
-          marginTop: 10,
-          color:
-            valueColor || (isNegative && !isPercentage ? "#DC2626" : "#1A1A1A"),
-        }}
-      >
-        {isNegative && !isPercentage ? "- " : ""}
-        {displayValue}
+      <div className="card kpi">
+        <div className="kpi-top">
+          <span className="kpi-label">Entradas</span>
+          <span className="kpi-icon" style={{ color: "var(--in-text)" }}><IconArrowUp size={16} /></span>
+        </div>
+        <div className="kpi-value">{formatMoney(s.entradasPeriodo)}</div>
+        <div className="kpi-foot">
+          <Delta current={s.entradasPeriodo} previous={s.mesAnterior.entradas} higherIsGood />
+        </div>
       </div>
-      {subtitle && (
-        <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>
-          {subtitle}
+      <div className="card kpi">
+        <div className="kpi-top">
+          <span className="kpi-label">Saídas</span>
+          <span className="kpi-icon" style={{ color: "var(--out-text)" }}><IconArrowDown size={16} /></span>
+        </div>
+        <div className="kpi-value">{formatMoney(s.saidasPeriodo)}</div>
+        <div className="kpi-foot">
+          <Delta current={s.saidasPeriodo} previous={s.mesAnterior.saidas} higherIsGood={false} />
+        </div>
+      </div>
+      <div className="card kpi">
+        <div className="kpi-top">
+          <span className="kpi-label">Taxa de economia</span>
+          <span className="kpi-icon"><IconPercent size={16} /></span>
+        </div>
+        <div className={`kpi-value ${s.taxaEconomia < 0 ? "text-out" : ""}`}>
+          {s.entradasPeriodo > 0 ? formatPercent(s.taxaEconomia, 1) : "—"}
+        </div>
+        <div className="kpi-foot">
+          {s.entradasPeriodo === 0
+            ? "sem entradas no mês"
+            : s.taxaEconomia >= 0
+              ? "da renda guardada"
+              : "gastou mais do que ganhou"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Planejamento ---------------- */
+
+function PlanningCard({
+  summary: s,
+  month,
+  onEditGoal,
+}: {
+  summary?: DashboardSummary;
+  month: string;
+  onEditGoal: () => void;
+}) {
+  if (!s) {
+    return (
+      <div className="card">
+        <Skeleton width={160} height={16} />
+        <Skeleton height={60} style={{ marginTop: 20 }} />
+      </div>
+    );
+  }
+
+  const spendable = s.entradasPeriodo - s.savingsGoal;
+  const usedPercent = spendable > 0 ? (s.saidasPeriodo / spendable) * 100 : 0;
+  const days = remainingDaysInMonth(month);
+  const perDay = days > 0 && s.availableToSpend > 0 ? s.availableToSpend / days : null;
+  const goalProgress = s.savingsGoal > 0 ? (s.saldoPeriodo / s.savingsGoal) * 100 : 0;
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Planejamento do mês</h2>
+          <p className="card-subtitle">Quanto você ainda pode gastar mantendo sua meta de economia</p>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={onEditGoal}>
+          <IconTarget size={14} /> {s.savingsGoal > 0 ? "Editar meta" : "Definir meta"}
+        </button>
+      </div>
+
+      <div className="plan-grid">
+        <div>
+          <div className="plan-item-label">Disponível para gastar</div>
+          <div className={`plan-item-value ${s.availableToSpend < 0 ? "text-out" : "text-in"}`}>
+            {formatMoney(s.availableToSpend)}
+          </div>
+          <div className="field-hint">
+            {s.availableToSpend < 0
+              ? "Você passou do planejado neste mês"
+              : perDay !== null && month === getCurrentMonth()
+                ? `≈ ${formatMoney(perDay)} por dia nos ${days} dias restantes`
+                : "entradas − meta − saídas"}
+          </div>
+        </div>
+        <div>
+          <div className="plan-item-label">Meta de economia</div>
+          <div className="plan-item-value">{s.savingsGoal > 0 ? formatMoney(s.savingsGoal) : "—"}</div>
+          <div className="field-hint">
+            {s.savingsGoal > 0
+              ? goalProgress >= 100
+                ? "Meta atingida com o saldo atual"
+                : `${formatPercent(Math.max(goalProgress, 0))} atingido pelo saldo`
+              : "Nenhuma meta definida"}
+          </div>
+        </div>
+        <div>
+          <div className="plan-item-label">Já gasto</div>
+          <div className="plan-item-value">{formatMoney(s.saidasPeriodo)}</div>
+          <div className="field-hint">
+            {spendable > 0 ? `${formatPercent(usedPercent)} do valor disponível` : "Lance suas entradas do mês"}
+          </div>
+        </div>
+      </div>
+
+      {spendable > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <ProgressBar percent={usedPercent} tone={budgetTone(usedPercent)} />
         </div>
       )}
     </div>
   );
 }
 
-const cardStyle: React.CSSProperties = {
-  background: "#fff",
-  borderRadius: 16,
-  padding: 20,
-  border: "1px solid #EEE",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-};
+/* ---------------- Total guardado ---------------- */
 
-const navButtonStyle: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 8,
-  border: "1px solid #DDD",
-  background: "#fff",
-  cursor: "pointer",
-  fontSize: 16,
-  color: "#555",
-};
+function SavingsCard({
+  summary: s,
+  upcoming,
+  month,
+  onEdit,
+}: {
+  summary?: DashboardSummary;
+  upcoming?: EvolutionPoint[];
+  month: string;
+  onEdit: () => void;
+}) {
+  if (!s) {
+    return (
+      <div className="card">
+        <Skeleton width={120} height={14} />
+        <Skeleton width="70%" height={28} style={{ marginTop: 12 }} />
+        <Skeleton height={60} style={{ marginTop: 20 }} />
+      </div>
+    );
+  }
+
+  const committed = (upcoming ?? []).filter((p) => p.saidas > 0);
+
+  return (
+    <div className="card">
+      <div className="card-header" style={{ marginBottom: 8 }}>
+        <div className="plan-item-label">
+          <IconPiggy size={15} /> Total guardado
+        </div>
+        <button className="btn btn-icon" onClick={onEdit} aria-label="Ajustar total guardado" title="Ajustar valor">
+          <IconEdit size={15} />
+        </button>
+      </div>
+      <div className={`kpi-value ${s.saldoGeralAcumulado < 0 ? "text-out" : ""}`} style={{ fontSize: 28 }}>
+        {formatMoney(s.saldoGeralAcumulado)}
+      </div>
+      <div className="field-hint">
+        Desde {formatMonthShort(s.savingsStartDate, true).toLowerCase()}, com lançamentos até hoje
+      </div>
+
+      <div className="divider" style={{ margin: "16px 0 12px" }} />
+
+      <div className="list compact">
+        <div className="list-row">
+          <span className="kpi-icon"><IconCard size={15} /></span>
+          <div className="row-main">
+            <div className="row-title">Fatura do cartão</div>
+            <div className="row-meta">{formatMonthLabel(month)}</div>
+          </div>
+          <div className="row-amount">{formatMoney(s.cartaoCreditoPeriodo)}</div>
+        </div>
+        {committed.map((p) => (
+          <div className="list-row" key={p.month}>
+            <span className="kpi-icon"><IconArrowDown size={15} /></span>
+            <div className="row-main">
+              <div className="row-title">Já comprometido</div>
+              <div className="row-meta">{formatMonthLabel(p.month)}</div>
+            </div>
+            <div className="row-amount">{formatMoney(p.saidas)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Evolução ---------------- */
+
+interface TooltipPayload {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<{ payload?: EvolutionPoint }>;
+}
+
+function EvolutionTooltip({ active, payload }: TooltipPayload) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip-title">{formatMonthLabel(point.month)}</div>
+      <div className="chart-tooltip-row">
+        <span><span className="legend-swatch" style={{ background: "var(--series-in)" }} /> Entradas</span>
+        <strong>{formatMoney(point.entradas)}</strong>
+      </div>
+      <div className="chart-tooltip-row">
+        <span><span className="legend-swatch" style={{ background: "var(--series-out)" }} /> Saídas</span>
+        <strong>{formatMoney(point.saidas)}</strong>
+      </div>
+      <div className="chart-tooltip-row" style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 5 }}>
+        <span>Saldo</span>
+        <strong className={point.saldo < 0 ? "text-out" : ""}>{formatMoney(point.saldo)}</strong>
+      </div>
+    </div>
+  );
+}
+
+function EvolutionCard({ data, month }: { data?: EvolutionPoint[]; month: string }) {
+  const colors = useThemeColors(["--series-in", "--series-out", "--grid", "--text-3", "--surface-hover"]);
+  const hasData = data?.some((p) => p.entradas > 0 || p.saidas > 0);
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Evolução</h2>
+          <p className="card-subtitle">
+            {formatMonthShort(shiftMonth(month, -5), true)} a {formatMonthShort(month, true)}
+          </p>
+        </div>
+        <div className="chart-legend">
+          <span><span className="legend-swatch" style={{ background: "var(--series-in)" }} /> Entradas</span>
+          <span><span className="legend-swatch" style={{ background: "var(--series-out)" }} /> Saídas</span>
+        </div>
+      </div>
+      {!data ? (
+        <Skeleton height={240} />
+      ) : !hasData ? (
+        <EmptyState icon={<IconList />} title="Sem lançamentos nesse período" />
+      ) : (
+        <div style={{ height: 240, marginLeft: -8 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} barGap={2} barCategoryGap="30%">
+              <CartesianGrid vertical={false} stroke={colors["--grid"]} />
+              <XAxis
+                dataKey="month"
+                tickFormatter={(m: string) => formatMonthShort(m)}
+                tick={{ fontSize: 12, fill: colors["--text-3"] }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tickFormatter={formatAxisValue}
+                tick={{ fontSize: 11, fill: colors["--text-3"] }}
+                axisLine={false}
+                tickLine={false}
+                width={48}
+              />
+              <Tooltip content={<EvolutionTooltip />} cursor={{ fill: colors["--surface-hover"] }} />
+              <Bar dataKey="entradas" name="Entradas" fill={colors["--series-in"]} radius={[4, 4, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="saidas" name="Saídas" fill={colors["--series-out"]} radius={[4, 4, 0, 0]} maxBarSize={22} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Categorias ---------------- */
+
+function CategoryCard({ data }: { data?: DistributionItem[] }) {
+  const total = data?.reduce((acc, item) => acc + item.total, 0) ?? 0;
+  const top = data?.slice(0, 6) ?? [];
+  const rest = data?.slice(6) ?? [];
+  const items =
+    rest.length > 0
+      ? [
+          ...top,
+          {
+            categoryId: -1,
+            name: `Outras (${rest.length})`,
+            color: "#94A3B8",
+            total: rest.reduce((acc, i) => acc + i.total, 0),
+            percentage: rest.reduce((acc, i) => acc + i.percentage, 0),
+          },
+        ]
+      : top;
+  const max = Math.max(...items.map((i) => i.total), 1);
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Gastos por categoria</h2>
+          <p className="card-subtitle">{data ? `${formatMoney(total)} no mês` : " "}</p>
+        </div>
+      </div>
+      {!data ? (
+        <div className="category-bars">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} height={28} />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState icon={<IconArrowDown />} title="Sem saídas neste mês" />
+      ) : (
+        <div className="category-bars">
+          {items.map((item) => (
+            <div key={item.categoryId ?? "none"}>
+              <div className="category-bar-top">
+                <span className="category-bar-name">
+                  <span className="dot" style={{ background: item.color }} />
+                  <span>{item.name}</span>
+                </span>
+                <span className="nowrap tabular">
+                  <strong>{formatMoney(item.total)}</strong>{" "}
+                  <span className="muted">{formatPercent(item.percentage)}</span>
+                </span>
+              </div>
+              <div className="category-bar-track">
+                <div className="category-bar-fill" style={{ width: `${(item.total / max) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Orçamentos ---------------- */
+
+function BudgetsCard({ data }: { data?: Budget[] }) {
+  const sorted = [...(data ?? [])].sort((a, b) => b.percentageUsed - a.percentageUsed).slice(0, 5);
+  const over = data?.filter((b) => b.percentageUsed > 100).length ?? 0;
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Orçamentos</h2>
+          <p className="card-subtitle">
+            {over > 0 ? `${over} ${over === 1 ? "categoria estourou" : "categorias estouraram"} o limite` : "Limites de gasto por categoria"}
+          </p>
+        </div>
+        <Link to="/metas" className="link-btn">Ver todos</Link>
+      </div>
+      {!data ? (
+        <Skeleton height={140} />
+      ) : sorted.length === 0 ? (
+        <EmptyState
+          icon={<IconTarget />}
+          title="Nenhum orçamento neste mês"
+          description="Defina limites para acompanhar seus gastos."
+          action={<Link to="/metas" className="btn btn-secondary btn-sm">Criar orçamento</Link>}
+        />
+      ) : (
+        <div className="category-bars">
+          {sorted.map((b) => (
+            <div key={b.id}>
+              <div className="category-bar-top">
+                <span className="category-bar-name">
+                  <span className="dot" style={{ background: b.color }} />
+                  <span>{b.categoryName}</span>
+                </span>
+                <span className="nowrap tabular">
+                  {formatMoney(b.spent)} <span className="muted">/ {formatMoney(b.limitAmount)}</span>
+                </span>
+              </div>
+              <ProgressBar percent={b.percentageUsed} tone={budgetTone(b.percentageUsed)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Últimos lançamentos ---------------- */
+
+function RecentCard({ data, onSelect }: { data?: Transaction[]; onSelect: (t: Transaction) => void }) {
+  const recent = data?.slice(0, 6) ?? [];
+  return (
+    <div className="card card-flush">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Últimos lançamentos</h2>
+          <p className="card-subtitle">{data ? `${data.length} no mês` : " "}</p>
+        </div>
+        <Link to="/transacoes" className="link-btn">Ver todos</Link>
+      </div>
+      {!data ? (
+        <div style={{ padding: 20 }}>
+          <Skeleton height={140} />
+        </div>
+      ) : recent.length === 0 ? (
+        <EmptyState icon={<IconList />} title="Nenhum lançamento neste mês" />
+      ) : (
+        <div className="list" style={{ paddingBottom: 6 }}>
+          {recent.map((t) => (
+            <div key={t.id} className="list-row clickable" onClick={() => onSelect(t)}>
+              <CategoryIcon name={t.category_name ?? t.description} color={t.category_color} />
+              <div className="row-main">
+                <div className="row-title">{t.description || t.category_name || "Sem descrição"}</div>
+                <div className="row-meta">
+                  {t.category_name ?? "Sem categoria"} ·{" "}
+                  {formatDate(t.payment_method === "credito" && t.purchase_date ? t.purchase_date : t.date)}
+                </div>
+              </div>
+              <div className={`row-amount ${t.type === "receita" ? "text-in" : ""}`}>
+                {formatSignedMoney(Number(t.amount), t.type)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Modais ---------------- */
+
+function GoalModal({ month, current, onClose }: { month: string; current: number; onClose: () => void }) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [cents, setCents] = useState(numberToCents(current));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(value: number) {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.post("/goals", { month_ref: `${month}-01`, savings_goal: value / 100 });
+      toast(value > 0 ? "Meta de economia salva" : "Meta removida");
+      notifyDataChanged();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Meta de economia"
+      description={`Quanto você quer guardar em ${formatMonthLabel(month).toLowerCase()}?`}
+      onClose={onClose}
+      size="sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save(cents);
+      }}
+      footer={
+        <>
+          {current > 0 && (
+            <button type="button" className="btn btn-danger-ghost" disabled={saving} onClick={() => save(0)}>
+              Remover meta
+            </button>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? <span className="spinner" /> : "Salvar meta"}
+          </button>
+        </>
+      }
+    >
+      <div className="form-stack">
+        <Field label="Valor da meta" htmlFor="goal">
+          <MoneyInput id="goal" cents={cents} onChange={setCents} large autoFocus />
+        </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
+  );
+}
+
+function SavingsModal({ current, onClose }: { current: number; onClose: () => void }) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [cents, setCents] = useState(numberToCents(current));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.put("/savings", { manual_total: cents / 100 });
+      toast("Total guardado atualizado");
+      notifyDataChanged();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Ajustar total guardado"
+      description="Informe quanto você realmente tem guardado hoje. Daqui pra frente o valor segue atualizando com seus lançamentos."
+      onClose={onClose}
+      size="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <span className="spinner" /> : "Salvar"}
+        </button>
+      }
+    >
+      <div className="form-stack">
+        <Field label="Valor guardado hoje" htmlFor="savings" hint="Para valor negativo, digite um sinal de menos.">
+          <MoneyInput id="savings" cents={cents} onChange={setCents} large autoFocus allowNegative />
+        </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
+  );
+}
