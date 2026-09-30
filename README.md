@@ -29,15 +29,17 @@ src/
   hooks/
     useFetch         GET com recarga automática quando algum dado é salvo (dataVersion)
     useThemeColors   Lê tokens CSS para os gráficos
-  pages/             Dashboard, Lançamentos, Orçamentos, Categorias, Importar, Perfil, Login, Cadastro
-  utils/             Datas, dinheiro, leitura de CSV/OFX, sugestão de categoria, preferências locais
+  pages/             Dashboard, Lançamentos, Contas e cartões, Orçamentos, Categorias, Importar, Perfil, Login, Cadastro
+  utils/             Datas, dinheiro, leitura de CSV/OFX, sugestão de categoria
   index.css          Design system (tokens claro/escuro, componentes, responsivo)
 ```
 
 ## Conceitos
 
 - **Valores** são digitados com máscara de centavos (`123456` → `1.234,56`) e enviados como número.
-- **Cartão de crédito**: `date` é o 1º dia do mês da fatura e `purchase_date` a data real da compra. Com o dia de fechamento configurado no Perfil, a fatura é sugerida automaticamente.
+- **Contas e cartões**: todo lançamento fica numa conta (dinheiro que você tem) ou num cartão (dívida que se acumula), nunca nos dois. O saldo da conta parte do saldo inicial e considera lançamentos até hoje.
+- **Cartão de crédito**: `date` é o 1º dia do mês da fatura e `purchase_date` a data real da compra. Com o dia de fechamento do cartão preenchido, a fatura é sugerida automaticamente.
+- **Transferência** (entre contas ou pagando a fatura) grava duas pontas ligadas: muda os saldos, mas não conta como receita nem despesa.
 - **Parcelada** divide o total em N lançamentos mensais; **Fixa mensal** repete o mesmo valor por N meses. Edição e exclusão podem valer para "só este", "este e os próximos" ou "todos".
 - **Mês selecionado** fica salvo na sessão e vale para todas as telas.
 - **Importação** (`/importar`): o CSV ou OFX é lido no próprio navegador (o arquivo não é enviado a lugar nenhum); só os lançamentos confirmados vão para a API. As colunas do CSV são descobertas sozinhas e a categoria é sugerida pelo histórico do usuário, com um dicionário de estabelecimentos como reserva.

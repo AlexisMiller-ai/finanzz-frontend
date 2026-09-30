@@ -3,10 +3,9 @@ import { api, getErrorMessage } from "../services/api";
 import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
-import type { Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
+import type { Account, Card, Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
 import { formatMonthShort, getCurrentMonth, shiftMonth, todayISO } from "../utils/date";
 import { formatMoney, numberToCents } from "../utils/money";
-import { getCardClosingDay } from "../utils/preferences";
 import { Modal } from "./Modal";
 import { Field, FormError, MoneyInput, Segmented } from "./ui/Form";
 import { IconInfo } from "./ui/Icons";
@@ -22,9 +21,8 @@ const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
 const INSTALLMENT_SUFFIX = /\s*\(\d+\/\d+\)$/;
 
 /** Mês da fatura sugerido: compras a partir do dia de fechamento vão para a fatura seguinte. */
-function suggestBillingMonth(purchaseDate: string): string {
+function suggestBillingMonth(purchaseDate: string, closingDay: number | null): string {
   const month = purchaseDate.slice(0, 7) || getCurrentMonth();
-  const closingDay = getCardClosingDay();
   const day = Number(purchaseDate.slice(8, 10));
   return closingDay && day >= closingDay ? shiftMonth(month, 1) : month;
 }
@@ -39,6 +37,8 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
   const { notifyDataChanged, month } = useApp();
   const toast = useToast();
   const { data: categories = [] } = useFetch<Category[]>("/categories");
+  const { data: accounts = [] } = useFetch<Account[]>("/accounts");
+  const { data: cards = [] } = useFetch<Card[]>("/cards");
 
   const isEditing = !!editing;
   const isGroup = !!(editing?.installment_group_id || editing?.recurrence_id);
@@ -63,6 +63,8 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
   const [billingOverride, setBillingOverride] = useState<string | null>(
     editing?.payment_method === "credito" ? editing.date.slice(0, 7) : null,
   );
+  const [accountId, setAccountId] = useState<number | "" | null>(editing?.account_id ?? null);
+  const [cardId, setCardId] = useState<number | "" | null>(editing?.card_id ?? null);
   const [mode, setMode] = useState<Mode>("single");
   const [installmentsInput, setInstallmentsInput] = useState("2");
   const [repeatInput, setRepeatInput] = useState("12");
@@ -71,7 +73,12 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const isCredit = type === "despesa" && paymentMethod === "credito";
-  const billingMonth = billingOverride ?? suggestBillingMonth(purchaseDate);
+  const activeAccounts = accounts.filter((a) => !a.archived || a.id === editing?.account_id);
+  const activeCards = cards.filter((c) => !c.archived || c.id === editing?.card_id);
+  const effectiveAccountId = accountId === null ? (activeAccounts[0]?.id ?? "") : accountId;
+  const effectiveCardId = cardId === null ? (activeCards[0]?.id ?? "") : cardId;
+  const selectedCard = activeCards.find((c) => c.id === effectiveCardId);
+  const billingMonth = billingOverride ?? suggestBillingMonth(purchaseDate, selectedCard?.closingDay ?? null);
   const typeCategories = categories.filter((c) => c.type === type);
   const effectiveCategoryId =
     categoryId === null ? (typeCategories[0]?.id ?? "") : categoryId;
@@ -105,6 +112,7 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
       date: isCredit ? `${billingMonth}-01` : purchaseDate,
       purchase_date: purchaseDate,
       payment_method: type === "receita" ? "dinheiro" : paymentMethod,
+      ...(isCredit ? { card_id: effectiveCardId || null } : { account_id: effectiveAccountId || null }),
     };
 
     if (!isEditing && effectiveMode === "installments") {
@@ -224,6 +232,40 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
               onChange={setPaymentMethod}
               options={PAYMENT_OPTIONS}
             />
+          </Field>
+        )}
+
+        {isCredit ? (
+          <Field label="Cartão" htmlFor="tx-card">
+            <select
+              id="tx-card"
+              className="select"
+              value={effectiveCardId}
+              onChange={(e) => setCardId(e.target.value ? Number(e.target.value) : "")}
+            >
+              {activeCards.length === 0 && <option value="">Cartão de crédito</option>}
+              {activeCards.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <Field label="Conta" htmlFor="tx-account">
+            <select
+              id="tx-account"
+              className="select"
+              value={effectiveAccountId}
+              onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : "")}
+            >
+              {activeAccounts.length === 0 && <option value="">Conta principal</option>}
+              {activeAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
           </Field>
         )}
 
@@ -348,10 +390,12 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
           </Field>
         )}
 
-        {isCredit && !isEditing && !getCardClosingDay() && (
+        {isCredit && !isEditing && selectedCard && !selectedCard.closingDay && (
           <div className="alert alert-info">
             <IconInfo size={16} />
-            <span>Dica: informe o dia de fechamento do cartão no Perfil para a fatura ser sugerida automaticamente.</span>
+            <span>
+              Informe o dia de fechamento em Contas e cartões para a fatura ser sugerida automaticamente.
+            </span>
           </div>
         )}
 

@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default:
 const Transactions = lazy(() => import("./pages/Transactions").then((m) => ({ default: m.Transactions })));
 const Budgets = lazy(() => import("./pages/Budgets").then((m) => ({ default: m.Budgets })));
 const Categories = lazy(() => import("./pages/Categories").then((m) => ({ default: m.Categories })));
+const Accounts = lazy(() => import("./pages/Accounts").then((m) => ({ default: m.Accounts })));
 const Import = lazy(() => import("./pages/Import").then((m) => ({ default: m.Import })));
 const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
 
@@ -37,6 +38,7 @@ function App() {
                 <Route path="/transacoes" element={<Transactions />} />
                 <Route path="/metas" element={<Budgets />} />
                 <Route path="/categorias" element={<Categories />} />
+                <Route path="/contas" element={<Accounts />} />
                 <Route path="/importar" element={<Import />} />
                 <Route path="/perfil" element={<Profile />} />
               </Route>
