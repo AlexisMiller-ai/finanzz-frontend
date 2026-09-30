@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, getErrorMessage } from "../services/api";
 import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
@@ -14,6 +15,7 @@ import {
   IconAlert,
   IconCard,
   IconDownload,
+  IconUpload,
   IconEdit,
   IconList,
   IconPlus,
@@ -178,8 +180,11 @@ export function Transactions() {
         </div>
         <div className="page-actions">
           <MonthSwitcher />
+          <Link className="btn btn-secondary hide-mobile" to="/importar">
+            <IconUpload size={16} /> Importar
+          </Link>
           <button className="btn btn-secondary hide-mobile" onClick={exportCsv} disabled={filtered.length === 0}>
-            <IconDownload size={16} /> CSV
+            <IconDownload size={16} /> Exportar
           </button>
           <button className="btn btn-primary hide-mobile" onClick={() => setQuickAddOpen(true)}>
             <IconPlus size={16} /> Novo
@@ -342,11 +347,16 @@ export function Transactions() {
         )}
       </div>
 
-      {data && data.length > 0 && (
-        <button className="btn btn-secondary hide-desktop" onClick={exportCsv}>
-          <IconDownload size={16} /> Exportar CSV
-        </button>
-      )}
+      <div className="page-actions hide-desktop">
+        <Link className="btn btn-secondary" to="/importar">
+          <IconUpload size={16} /> Importar extrato
+        </Link>
+        {data && data.length > 0 && (
+          <button className="btn btn-secondary" onClick={exportCsv}>
+            <IconDownload size={16} /> Exportar CSV
+          </button>
+        )}
+      </div>
 
       {editing && (
         <TransactionFormModal
