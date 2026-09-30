@@ -41,4 +41,5 @@ src/
 - **Parcelada** divide o total em N lançamentos mensais; **Fixa mensal** repete o mesmo valor por N meses. Edição e exclusão podem valer para "só este", "este e os próximos" ou "todos".
 - **Mês selecionado** fica salvo na sessão e vale para todas as telas.
 - **Importação** (`/importar`): o CSV ou OFX é lido no próprio navegador (o arquivo não é enviado a lugar nenhum); só os lançamentos confirmados vão para a API. As colunas do CSV são descobertas sozinhas e a categoria é sugerida pelo histórico do usuário, com um dicionário de estabelecimentos como reserva.
+- **Conciliação**: quem lança na hora não recebe duplicado. Cada linha do arquivo procura um lançamento seu com valor parecido em uma janela de dias e aparece como "você lançou: ...", com três opções — conciliar (o padrão), ignorar ou importar mesmo assim. Conciliar marca o seu lançamento como conferido, então ele não reaparece em importações futuras.
 - Atalho: tecla **N** abre um novo lançamento.

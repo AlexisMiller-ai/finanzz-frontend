@@ -26,18 +26,32 @@ import { IconAlert, IconCheck, IconDownload, IconInfo, IconList } from "../compo
 
 type Source = "extrato" | "fatura";
 
+/** O que fazer com cada linha do arquivo. */
+type Action = "import" | "reconcile" | "skip";
+
+interface MatchInfo {
+  id: number;
+  date: string;
+  description: string | null;
+  amount: number;
+  kind: "exact" | "amount-differs";
+}
+
 interface PreviewItem {
   index: number;
   row: ParsedRow;
   type: TransactionType;
   categoryId: number | "";
-  include: boolean;
+  action: Action;
   duplicate: boolean;
+  match?: MatchInfo;
   error?: string;
 }
 
 interface ImportResult {
   imported: number;
+  reconciled: number;
+  amountsFixed: number;
   duplicates: number;
   errors: number;
 }
@@ -174,14 +188,16 @@ export function Import() {
         row,
         type,
         categoryId: suggest(row.description, type) ?? "",
-        include: true,
+        action: "import" as Action,
         duplicate: false,
       };
     });
 
     setBusy(true);
     try {
-      const res = await api.post<{ results: { index: number; status: string; message?: string }[] }>(
+      const res = await api.post<{
+        results: { index: number; status: string; message?: string; match?: MatchInfo }[];
+      }>(
         "/transactions/import",
         {
           dry_run: true,
@@ -195,10 +211,13 @@ export function Import() {
           const status = byIndex.get(item.index);
           const duplicate = status?.status === "duplicate";
           const failed = status?.status === "error";
+          const match = status?.status === "match" ? status.match : undefined;
           return {
             ...item,
             duplicate,
-            include: !duplicate && !failed,
+            // Já lançado na mão: a opção padrão é conciliar, não criar de novo.
+            action: (failed || duplicate ? "skip" : match ? "reconcile" : "import") as Action,
+            ...(match ? { match } : {}),
             ...(failed && status?.message ? { error: status.message } : {}),
           };
         }),
@@ -212,24 +231,63 @@ export function Import() {
 
   async function runImport() {
     if (!items) return;
-    const selected = items.filter((item) => item.include && !item.error);
-    if (selected.length === 0) {
-      setError("Selecione ao menos um lançamento.");
+    const toImport = items.filter((item) => item.action === "import" && !item.error);
+    const toReconcile = items.filter((item) => item.action === "reconcile" && item.match);
+
+    if (toImport.length === 0 && toReconcile.length === 0) {
+      setError("Escolha ao menos um lançamento para importar ou conciliar.");
       return;
     }
 
     setBusy(true);
     setError(null);
     try {
-      const res = await api.post<ImportResult>("/transactions/import", {
-        transactions: selected.map((item) => toApiRow(item.row, item.type, item.categoryId)),
-      });
-      setResult(res.data);
+      let reconciled = 0;
+      let amountsFixed = 0;
+
+      // Primeiro concilia: marca os lançamentos que você já tinha feito na mão.
+      if (toReconcile.length > 0) {
+        const res = await api.post<{ reconciled: number; amountsFixed: number }>(
+          "/transactions/reconcile",
+          {
+            items: toReconcile.map((item) => ({
+              transaction_id: item.match!.id,
+              external_id: item.row.externalId,
+              // Valor diferente: o do banco vale, o seu era só uma estimativa.
+              ...(item.match!.kind === "amount-differs"
+                ? { amount: Math.abs(item.row.amount) }
+                : {}),
+            })),
+          },
+        );
+        reconciled = res.data.reconciled;
+        amountsFixed = res.data.amountsFixed;
+      }
+
+      let imported = 0;
+      let duplicates = 0;
+      let errors = 0;
+      if (toImport.length > 0) {
+        const res = await api.post<ImportResult>("/transactions/import", {
+          transactions: toImport.map((item) => toApiRow(item.row, item.type, item.categoryId)),
+        });
+        imported = res.data.imported;
+        duplicates = res.data.duplicates;
+        errors = res.data.errors;
+      }
+
+      setResult({ imported, reconciled, amountsFixed, duplicates, errors });
       setItems(null);
       notifyDataChanged();
-      toast(`${res.data.imported} lançamentos importados`);
+      toast(
+        reconciled > 0 && imported > 0
+          ? `${imported} importados e ${reconciled} conciliados`
+          : reconciled > 0
+            ? `${reconciled} lançamentos conciliados`
+            : `${imported} lançamentos importados`,
+      );
     } catch (err) {
-      setError(getErrorMessage(err, "Não consegui importar os lançamentos."));
+      setError(getErrorMessage(err, "Não consegui concluir a importação."));
     } finally {
       setBusy(false);
     }
@@ -239,9 +297,11 @@ export function Import() {
     setItems((list) => list?.map((item) => (item.index === index ? { ...item, ...changes } : item)) ?? null);
   }
 
-  const selectedCount = items?.filter((i) => i.include && !i.error).length ?? 0;
+  const importCount = items?.filter((i) => i.action === "import" && !i.error).length ?? 0;
+  const reconcileCount = items?.filter((i) => i.action === "reconcile" && i.match).length ?? 0;
   const duplicateCount = items?.filter((i) => i.duplicate).length ?? 0;
   const errorCount = items?.filter((i) => i.error).length ?? 0;
+  const actionCount = importCount + reconcileCount;
 
   return (
     <div className="page" style={{ maxWidth: 900 }}>
@@ -258,9 +318,22 @@ export function Import() {
         <div className="card">
           <EmptyState
             icon={<IconCheck />}
-            title={`${result.imported} ${result.imported === 1 ? "lançamento importado" : "lançamentos importados"}`}
+            title={
+              result.imported > 0
+                ? `${result.imported} ${result.imported === 1 ? "lançamento importado" : "lançamentos importados"}`
+                : "Importação concluída"
+            }
             description={
               <>
+                {result.reconciled > 0 && (
+                  <div>
+                    {result.reconciled}{" "}
+                    {result.reconciled === 1
+                      ? "lançamento seu foi conciliado"
+                      : "lançamentos seus foram conciliados"}
+                    {result.amountsFixed > 0 && ` (${result.amountsFixed} com o valor corrigido)`}.
+                  </div>
+                )}
                 {result.duplicates > 0 && <div>{result.duplicates} já existiam e foram ignorados.</div>}
                 {result.errors > 0 && <div>{result.errors} linhas tinham problema e não entraram.</div>}
               </>
@@ -447,8 +520,9 @@ export function Import() {
                 <div>
                   <h2 className="card-title">3. Revise antes de importar</h2>
                   <p className="card-subtitle">
-                    {selectedCount} selecionados
-                    {duplicateCount > 0 && ` · ${duplicateCount} já existem`}
+                    {importCount} a importar
+                    {reconcileCount > 0 && ` · ${reconcileCount} a conciliar com o que você já lançou`}
+                    {duplicateCount > 0 && ` · ${duplicateCount} já importados antes`}
                     {errorCount > 0 && ` · ${errorCount} com problema`}
                   </p>
                 </div>
@@ -457,15 +531,22 @@ export function Import() {
               <div className="toolbar" style={{ padding: "0 20px 14px" }}>
                 <button
                   className="btn btn-secondary btn-sm"
-                  onClick={() => setItems(items.map((i) => ({ ...i, include: !i.error })))}
+                  onClick={() =>
+                    setItems(
+                      items.map((i) => ({
+                        ...i,
+                        action: (i.error || i.duplicate ? "skip" : i.match ? "reconcile" : "import") as Action,
+                      })),
+                    )
+                  }
                 >
-                  Selecionar todos
+                  Restaurar sugestão
                 </button>
                 <button
                   className="btn btn-secondary btn-sm"
-                  onClick={() => setItems(items.map((i) => ({ ...i, include: false })))}
+                  onClick={() => setItems(items.map((i) => ({ ...i, action: "skip" as Action })))}
                 >
-                  Limpar seleção
+                  Não fazer nada
                 </button>
                 <select
                   className="select"
@@ -487,7 +568,9 @@ export function Import() {
                     const category = categories.find((c) => c.id === bulkCategory);
                     setItems(
                       items.map((i) =>
-                        i.include && category && i.type === category.type ? { ...i, categoryId: category.id } : i,
+                        i.action === "import" && category && i.type === category.type
+                          ? { ...i, categoryId: category.id }
+                          : i,
                       ),
                     );
                   }}
@@ -501,38 +584,68 @@ export function Import() {
                   <div key={item.index} className="list-row import-row">
                     <input
                       type="checkbox"
-                      checked={item.include}
-                      disabled={!!item.error}
-                      onChange={(e) => updateItem(item.index, { include: e.target.checked })}
-                      aria-label={`Importar ${item.row.description}`}
+                      checked={item.action !== "skip"}
+                      disabled={!!item.error || item.duplicate}
+                      onChange={(e) =>
+                        updateItem(item.index, {
+                          action: e.target.checked ? (item.match ? "reconcile" : "import") : "skip",
+                        })
+                      }
+                      aria-label={`Usar ${item.row.description}`}
                       style={{ width: 16, height: 16, flexShrink: 0 }}
                     />
                     <div className="row-main">
                       <div className="row-title">{item.row.description || "Sem descrição"}</div>
                       <div className="row-meta">
                         <span>{formatDate(item.row.date)}</span>
-                        {item.duplicate && <span className="badge badge-warning">já existe</span>}
+                        {item.duplicate && <span className="badge badge-warning">já importado</span>}
                         {item.error && <span className="badge badge-out">{item.error}</span>}
-                        {source === "fatura" && <span className="badge">fatura {formatMonthLabel(billingMonth)}</span>}
+                        {!item.match && !item.duplicate && !item.error && source === "fatura" && (
+                          <span className="badge">fatura {formatMonthLabel(billingMonth)}</span>
+                        )}
+                        {item.match && (
+                          <span className="badge badge-primary">
+                            você lançou: {formatDate(item.match.date)} ·{" "}
+                            {item.match.description || "sem descrição"} · {formatMoney(item.match.amount)}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <select
-                      className="select import-category"
-                      value={item.categoryId}
-                      onChange={(e) =>
-                        updateItem(item.index, { categoryId: e.target.value ? Number(e.target.value) : "" })
-                      }
-                      aria-label="Categoria"
-                    >
-                      <option value="">Sem categoria</option>
-                      {categories
-                        .filter((c) => c.type === item.type)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                    </select>
+                    {item.match ? (
+                      <select
+                        className="select import-category"
+                        value={item.action}
+                        onChange={(e) => updateItem(item.index, { action: e.target.value as Action })}
+                        aria-label="O que fazer com esta linha"
+                      >
+                        <option value="reconcile">
+                          {item.match.kind === "amount-differs"
+                            ? `Conciliar e corrigir para ${formatMoney(Math.abs(item.row.amount))}`
+                            : "Conciliar (já lancei)"}
+                        </option>
+                        <option value="skip">Ignorar</option>
+                        <option value="import">Importar mesmo assim</option>
+                      </select>
+                    ) : (
+                      <select
+                        className="select import-category"
+                        value={item.categoryId}
+                        onChange={(e) =>
+                          updateItem(item.index, { categoryId: e.target.value ? Number(e.target.value) : "" })
+                        }
+                        aria-label="Categoria"
+                        disabled={item.action === "skip"}
+                      >
+                        <option value="">Sem categoria</option>
+                        {categories
+                          .filter((c) => c.type === item.type)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </select>
+                    )}
                     <div className={`row-amount ${item.type === "receita" ? "text-in" : ""}`}>
                       {item.type === "receita" ? "+ " : "- "}
                       {formatMoney(Math.abs(item.row.amount))}
@@ -543,8 +656,16 @@ export function Import() {
 
               <div className="modal-footer" style={{ justifyContent: "space-between" }}>
                 <FormError message={error} />
-                <button className="btn btn-primary" onClick={runImport} disabled={busy || selectedCount === 0}>
-                  {busy ? <span className="spinner" /> : `Importar ${selectedCount} lançamentos`}
+                <button className="btn btn-primary" onClick={runImport} disabled={busy || actionCount === 0}>
+                  {busy ? (
+                    <span className="spinner" />
+                  ) : reconcileCount > 0 && importCount > 0 ? (
+                    `Importar ${importCount} e conciliar ${reconcileCount}`
+                  ) : reconcileCount > 0 ? (
+                    `Conciliar ${reconcileCount} lançamentos`
+                  ) : (
+                    `Importar ${importCount} lançamentos`
+                  )}
                 </button>
               </div>
             </div>
