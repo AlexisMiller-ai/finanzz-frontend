@@ -42,8 +42,19 @@ export interface Card {
   paymentAccountName: string | null;
   archived: boolean;
   isDefault: boolean;
-  /** Dívida até a fatura do mês atual, já descontados os pagamentos. */
+  /** Dívida de hoje: faturas fechadas sem baixa + o que já caiu na fatura aberta. */
   outstanding: number;
+  /** Só as faturas que já fecharam e seguem sem baixa. */
+  closedDue: number;
+  /** Mês da fatura que ainda está recebendo compras ("YYYY-MM"). */
+  openBillMonth: string;
+  /** Total já lançado na fatura aberta. */
+  openBillTotal: number;
+  openBillClosingDate: string | null;
+  openBillDueDate: string | null;
+  openBillPaid: boolean;
+  /** Quantas faturas fechadas ainda não foram marcadas como pagas. */
+  closedUnpaidCount: number;
   /** Parcelas que ainda vão cair em faturas futuras. */
   futureInstallments: number;
   /** Correção manual do valor em aberto (faturas antigas já pagas). */
@@ -115,4 +126,31 @@ export interface Budget {
   spent: number;
   remaining: number;
   percentageUsed: number;
+}
+
+export type BillStatus = "paga" | "fechada" | "aberta" | "futura";
+
+/** Como a fatura foi quitada: transferência da conta, fora do app, ou já lançada à mão. */
+export type BillPaymentKind = "transferencia" | "externo" | "lancado";
+
+export interface Bill {
+  /** Mês de referência da fatura ("YYYY-MM"). */
+  month: string;
+  total: number;
+  /** Pagamentos já lançados no app para essa fatura. */
+  credits: number;
+  /** Quanto ainda falta pagar. */
+  remaining: number;
+  status: BillStatus;
+  closingDate: string | null;
+  dueDate: string | null;
+  items: number;
+  payment: { kind: BillPaymentKind; amount: number; date: string } | null;
+}
+
+export interface BillsResponse {
+  cardId: number;
+  cardName: string;
+  openBillMonth: string;
+  bills: Bill[];
 }

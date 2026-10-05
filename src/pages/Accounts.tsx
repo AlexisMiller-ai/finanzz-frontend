@@ -4,14 +4,16 @@ import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
 import type { Account, AccountKind, Card } from "../types";
-import { formatMonthLabel } from "../utils/date";
+import { formatDate, formatMonthLabel, formatMonthShort } from "../utils/date";
 import { formatMoney, numberToCents } from "../utils/money";
 import { ChoiceDialog, Modal } from "../components/Modal";
+import { BillsModal } from "../components/BillsModal";
 import { TransferFormModal } from "../components/TransferForm";
 import { CategoryIcon, EmptyState, MonthSwitcher, ProgressBar, Skeleton } from "../components/ui/Common";
 import { Field, FormError, MoneyInput, Segmented, SwitchRow } from "../components/ui/Form";
 import {
   IconAlert,
+  IconCalendar,
   IconCard,
   IconEdit,
   IconPlus,
@@ -39,6 +41,7 @@ export function Accounts() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [adjusting, setAdjusting] = useState<Account | null>(null);
   const [adjustingCard, setAdjustingCard] = useState<Card | null>(null);
+  const [billsCard, setBillsCard] = useState<Card | null>(null);
 
   const activeAccounts = (accounts.data ?? []).filter((a) => !a.archived);
   const archivedAccounts = (accounts.data ?? []).filter((a) => a.archived);
@@ -113,7 +116,8 @@ export function Accounts() {
                       <div className="row-main">
                         <div className="row-title">{account.name}</div>
                         <div className="row-meta">
-                          {KIND_LABEL[account.kind]} · {account.transactionCount} lançamentos
+                          {KIND_LABEL[account.kind]} · {account.transactionCount}{" "}
+                          {account.transactionCount === 1 ? "lançamento" : "lançamentos"}
                           {account.isDefault && <span className="badge badge-primary">padrão</span>}
                         </div>
                       </div>
@@ -211,26 +215,26 @@ export function Accounts() {
                               </span>
                               <span>{cardDaysLabel(card)}</span>
                             </div>
-                            {card.futureInstallments > 0 && (
-                              <div className="row-meta">
-                                + {formatMoney(card.futureInstallments)} em parcelas de faturas futuras
-                              </div>
-                            )}
+                            <CardBillLines card={card} onOpenBills={() => setBillsCard(card)} />
                           </>
                         ) : (
                           <>
                             <div className="row-meta">
                               {formatMoney(card.outstanding)} em aberto · {cardDaysLabel(card)}
                             </div>
-                            {card.futureInstallments > 0 && (
-                              <div className="row-meta">
-                                + {formatMoney(card.futureInstallments)} em parcelas de faturas futuras
-                              </div>
-                            )}
+                            <CardBillLines card={card} onOpenBills={() => setBillsCard(card)} />
                           </>
                         )}
                       </div>
                       <div className="row-actions" style={{ display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn btn-icon"
+                          onClick={() => setBillsCard(card)}
+                          aria-label={`Faturas de ${card.name}`}
+                          title="Faturas e baixa de pagamento"
+                        >
+                          <IconCalendar size={16} />
+                        </button>
                         <button
                           className="btn btn-icon"
                           onClick={() => setAdjustingCard(card)}
@@ -275,10 +279,59 @@ export function Accounts() {
       {deleting && <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />}
       {transferOpen && <TransferFormModal onClose={() => setTransferOpen(false)} />}
       {adjusting && <AdjustBalanceModal account={adjusting} onClose={() => setAdjusting(null)} />}
+      {billsCard && (
+        <BillsModal
+          card={billsCard}
+          accounts={activeAccounts}
+          onClose={() => setBillsCard(null)}
+        />
+      )}
       {adjustingCard && (
         <AdjustOutstandingModal card={adjustingCard} onClose={() => setAdjustingCard(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * Resumo das faturas do cartão: a que está aberta (pelo dia de fechamento),
+ * as que já fecharam e seguem sem baixa, e as parcelas que ainda vão cair.
+ */
+function CardBillLines({ card, onOpenBills }: { card: Card; onOpenBills: () => void }) {
+  const count = card.closedUnpaidCount;
+  return (
+    <>
+      <div className="row-meta">
+        Fatura aberta de {formatMonthShort(`${card.openBillMonth}-01`, true)}:{" "}
+        {formatMoney(card.openBillTotal)}
+        {card.openBillDueDate && ` · vence ${formatDate(card.openBillDueDate)}`}
+      </div>
+      {card.closedDue > 0 && (
+        <div className="row-meta">
+          <span style={{ color: "var(--danger)" }}>
+            {count > 0
+              ? `${count} ${count === 1 ? "fatura que já fechou" : "faturas que já fecharam"} sem baixa: `
+              : "De faturas que já fecharam: "}
+            {formatMoney(card.closedDue)}
+          </span>
+          <button
+            type="button"
+            className="link-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenBills();
+            }}
+          >
+            já paguei
+          </button>
+        </div>
+      )}
+      {card.futureInstallments > 0 && (
+        <div className="row-meta">
+          + {formatMoney(card.futureInstallments)} em parcelas de faturas futuras
+        </div>
+      )}
+    </>
   );
 }
 
