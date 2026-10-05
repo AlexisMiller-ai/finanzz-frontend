@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Finanzz — controle suas finanças pessoais: lançamentos, cartão de crédito, parcelas, orçamentos e metas." />
     <meta name="theme-color" content="#111018" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Finanzz" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Finanzz</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,6 +24,12 @@
       try {
         var theme = localStorage.getItem("finanzz_theme");
         if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+        var claro =
+          theme === "light" ||
+          (theme !== "dark" && window.matchMedia("(prefers-color-scheme: light)").matches);
+        if (claro) {
+          document.querySelector('meta[name="theme-color"]').content = "#ffffff";
+        }
       } catch (e) {}
     </script>
   </head>

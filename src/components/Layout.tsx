@@ -1,8 +1,9 @@
 import { Suspense, useEffect } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useApp } from "../contexts/AppContext";
 import { getInitials } from "../utils/format";
+import { OfflineBar } from "./PwaManager";
 import { TransactionFormModal } from "./TransactionForm";
 import {
   IconWallet,
@@ -53,6 +54,7 @@ export function Layout() {
   const { theme, setTheme, quickAddOpen, setQuickAddOpen } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const userName = user?.name || "Usuário";
   const isDark =
@@ -62,6 +64,14 @@ export function Layout() {
   useEffect(() => {
     document.title = `${pageTitles[location.pathname] ?? "Finanzz"} · Finanzz`;
   }, [location.pathname]);
+
+  // Atalho "Novo lançamento" do ícone instalado na tela inicial.
+  useEffect(() => {
+    if (searchParams.get("novo") === "1") {
+      setQuickAddOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, setQuickAddOpen]);
 
   // Atalho: tecla "N" abre um novo lançamento.
   useEffect(() => {
@@ -141,6 +151,7 @@ export function Layout() {
         </header>
 
         <main className="main">
+          <OfflineBar />
           <Suspense fallback={<div className="full-center" style={{ minHeight: 300 }}><span className="spinner" /></div>}>
             <Outlet />
           </Suspense>

@@ -8,7 +8,8 @@ import { useToast } from "../contexts/ToastContext";
 import type { User } from "../types";
 import { getInitials } from "../utils/format";
 import { Field, FormError, Segmented } from "../components/ui/Form";
-import { IconLogout } from "../components/ui/Icons";
+import { IconDownload, IconLogout } from "../components/ui/Icons";
+import { ehIOS, estaInstalado, instalarApp, useInstalavel } from "../utils/pwa";
 
 export function Profile() {
   const { user, updateUser, logout } = useAuth();
@@ -135,6 +136,8 @@ export function Profile() {
         </div>
       </div>
 
+      <InstalarCard />
+
       <form className="card" onSubmit={savePassword}>
         <div className="card-header">
           <div>
@@ -193,6 +196,55 @@ export function Profile() {
       >
         <IconLogout size={16} /> Sair da conta
       </button>
+    </div>
+  );
+}
+
+/**
+ * Instalar o Finanzz na tela inicial. O convite do navegador só aparece em
+ * alguns casos, então aqui também ficam as instruções para quem não o recebe
+ * (iPhone, por exemplo, só instala pelo menu Compartilhar do Safari).
+ */
+function InstalarCard() {
+  const toast = useToast();
+  const instalavel = useInstalavel();
+  const [instalado, setInstalado] = useState(() => estaInstalado());
+
+  async function instalar() {
+    if (await instalarApp()) {
+      setInstalado(true);
+      toast("Finanzz instalado na tela inicial");
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <h2 className="card-title">Instalar no celular</h2>
+          <p className="card-subtitle">
+            Ícone na tela inicial, sem a barra do navegador, e as telas de consulta abrem mesmo sem
+            internet
+          </p>
+        </div>
+      </div>
+      {instalado ? (
+        <p className="muted">O Finanzz já está instalado neste aparelho.</p>
+      ) : instalavel ? (
+        <button className="btn btn-primary" onClick={instalar}>
+          <IconDownload size={16} /> Instalar o Finanzz
+        </button>
+      ) : ehIOS() ? (
+        <p className="muted">
+          No iPhone ou iPad: abra o Finanzz no Safari, toque em <strong>Compartilhar</strong> e
+          escolha <strong>Adicionar à Tela de Início</strong>.
+        </p>
+      ) : (
+        <p className="muted">
+          Abra o menu do navegador e escolha <strong>Instalar aplicativo</strong>. Se a opção não
+          aparecer, o app já está instalado ou o navegador não oferece instalação.
+        </p>
+      )}
     </div>
   );
 }

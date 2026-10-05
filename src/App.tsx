@@ -5,6 +5,7 @@ import { AppProvider } from "./contexts/AppContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { GuestRoute, ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
+import { PwaManager } from "./components/PwaManager";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 
@@ -22,6 +23,7 @@ function App() {
     <AppProvider>
       <ToastProvider>
         <AuthProvider>
+          <PwaManager />
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
