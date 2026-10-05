@@ -38,6 +38,7 @@ export function Accounts() {
   const [deleting, setDeleting] = useState<{ kind: "account" | "card"; item: Account | Card } | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [adjusting, setAdjusting] = useState<Account | null>(null);
+  const [adjustingCard, setAdjustingCard] = useState<Card | null>(null);
 
   const activeAccounts = (accounts.data ?? []).filter((a) => !a.archived);
   const archivedAccounts = (accounts.data ?? []).filter((a) => a.archived);
@@ -230,6 +231,14 @@ export function Accounts() {
                         )}
                       </div>
                       <div className="row-actions" style={{ display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn btn-icon"
+                          onClick={() => setAdjustingCard(card)}
+                          aria-label={`Ajustar fatura em aberto de ${card.name}`}
+                          title="Ajustar o que deve hoje"
+                        >
+                          <IconTarget size={16} />
+                        </button>
                         <button className="btn btn-icon" onClick={() => setEditingCard(card)} aria-label={`Editar ${card.name}`}>
                           <IconEdit size={16} />
                         </button>
@@ -266,6 +275,9 @@ export function Accounts() {
       {deleting && <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />}
       {transferOpen && <TransferFormModal onClose={() => setTransferOpen(false)} />}
       {adjusting && <AdjustBalanceModal account={adjusting} onClose={() => setAdjusting(null)} />}
+      {adjustingCard && (
+        <AdjustOutstandingModal card={adjustingCard} onClose={() => setAdjustingCard(null)} />
+      )}
     </div>
   );
 }
@@ -316,6 +328,71 @@ function AdjustBalanceModal({ account, onClose }: { account: Account; onClose: (
         <Field label="Saldo de hoje" htmlFor="adj-balance" hint="Para conta negativa, digite um sinal de menos.">
           <MoneyInput id="adj-balance" cents={cents} onChange={setCents} large autoFocus allowNegative />
         </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
+  );
+}
+
+function AdjustOutstandingModal({ card, onClose }: { card: Card; onClose: () => void }) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [cents, setCents] = useState(numberToCents(card.outstanding));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.put(`/cards/${card.id}/outstanding`, { current_outstanding: cents / 100 });
+      toast("Fatura em aberto ajustada");
+      notifyDataChanged();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Fatura em aberto · ${card.name}`}
+      description="Informe quanto você deve nesse cartão hoje. Use quando faturas antigas já foram pagas fora do app, ou depois de mover compras entre cartões."
+      onClose={onClose}
+      size="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <span className="spinner" /> : "Ajustar"}
+        </button>
+      }
+    >
+      <div className="form-stack">
+        <Field
+          label="Valor devido hoje"
+          htmlFor="adj-outstanding"
+          hint={
+            <>
+              Fatura deste mês: {formatMoney(card.billTotal)}. Se as anteriores já estão pagas, esse
+              costuma ser o valor certo.
+              {card.outstandingAdjustment !== 0 && (
+                <> Ajuste atual: {formatMoney(card.outstandingAdjustment)}.</>
+              )}
+            </>
+          }
+        >
+          <MoneyInput id="adj-outstanding" cents={cents} onChange={setCents} large autoFocus />
+        </Field>
+        <button
+          type="button"
+          className="link-btn"
+          style={{ alignSelf: "flex-start" }}
+          onClick={() => setCents(numberToCents(card.billTotal))}
+        >
+          Usar a fatura deste mês ({formatMoney(card.billTotal)})
+        </button>
         <FormError message={error} />
       </div>
     </Modal>

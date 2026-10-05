@@ -46,6 +46,8 @@ export interface Card {
   outstanding: number;
   /** Parcelas que ainda vão cair em faturas futuras. */
   futureInstallments: number;
+  /** Correção manual do valor em aberto (faturas antigas já pagas). */
+  outstandingAdjustment: number;
   /** Total da fatura do mês consultado. */
   billTotal: number;
   transactionCount: number;
