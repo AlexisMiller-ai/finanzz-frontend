@@ -1739,6 +1739,20 @@ h3 {
   font-size: 13px;
 }
 
+/* Faixa de aviso quando a internet cai: o app segue aberto com o que já tinha. */
+.offline-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 /* ---------- Misc ---------- */
 
 .divider {

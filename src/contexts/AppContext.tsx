@@ -27,6 +27,13 @@ function applyTheme(theme: ThemePreference) {
   const root = document.documentElement;
   if (theme === "system") delete root.dataset.theme;
   else root.dataset.theme = theme;
+
+  // Instalado na tela inicial, a barra do sistema usa esta cor.
+  const claro =
+    theme === "light" ||
+    (theme === "system" && window.matchMedia("(prefers-color-scheme: light)").matches);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", claro ? "#ffffff" : "#111018");
 }
 
 interface AppContextType {

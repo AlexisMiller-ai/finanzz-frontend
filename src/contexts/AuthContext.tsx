@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, TOKEN_KEY } from "../services/api";
 import type { User } from "../types";
+import { limparRespostas } from "../services/offlineCache";
 
 interface AuthContextType {
   user: User | null;
@@ -45,6 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
+    // O app guarda respostas da API para funcionar sem internet; ao sair,
+    // esses dados não ficam no aparelho.
+    void limparRespostas();
     setUser(null);
   }
 

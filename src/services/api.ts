@@ -1,4 +1,5 @@
 import axios from "axios";
+import { guardarResposta, lerResposta } from "./offlineCache";
 
 export const TOKEN_KEY = "finanzz_token";
 
@@ -24,16 +25,41 @@ function isTransient(error: unknown) {
   return !error.response || error.code === "ECONNABORTED" || status === 502 || status === 503 || status === 504;
 }
 
+const ehGet = (config: { method?: string } | undefined) => (config?.method ?? "get") === "get";
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Consulta que deu certo vira a cópia offline daquela tela.
+    if (ehGet(response.config) && response.config.url) {
+      void guardarResposta(response.config.url, response.data);
+    }
+    return response;
+  },
   async (error) => {
     // Primeira chamada depois de um tempo parado pode falhar enquanto o
     // servidor e o banco acordam: repete uma vez antes de mostrar erro.
     const config = error.config as (typeof error.config & { _retried?: boolean }) | undefined;
-    if (config && !config._retried && isTransient(error) && (config.method ?? "get") === "get") {
+    // Sem internet não adianta repetir: vai direto para a cópia guardada.
+    if (config && !config._retried && navigator.onLine && isTransient(error) && (config.method ?? "get") === "get") {
       config._retried = true;
       await new Promise((resolve) => setTimeout(resolve, 1500));
       return api.request(config);
+    }
+
+    // Sem rede (ou servidor fora), a consulta responde com o que foi guardado
+    // na última vez. A faixa de "sem conexão" avisa que os dados são de antes.
+    if (config && ehGet(config) && config.url && !error.response) {
+      const guardado = await lerResposta(config.url);
+      if (guardado) {
+        return {
+          data: guardado.dados,
+          status: 200,
+          statusText: "OK (offline)",
+          headers: {},
+          config,
+          request: null,
+        };
+      }
     }
 
     const isAuthRoute = String(error.config?.url ?? "").startsWith("/auth/");
