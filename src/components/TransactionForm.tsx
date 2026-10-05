@@ -8,7 +8,7 @@ import { formatMonthShort, getCurrentMonth, shiftMonth, todayISO } from "../util
 import { formatMoney, numberToCents } from "../utils/money";
 import { pickDefault, setLastUsed } from "../utils/preferences";
 import { Modal } from "./Modal";
-import { Field, FormError, MoneyInput, Segmented } from "./ui/Form";
+import { Field, FormError, MoneyInput, Segmented, SwitchRow } from "./ui/Form";
 import { IconInfo } from "./ui/Icons";
 
 type Mode = "single" | "installments" | "recurring";
@@ -72,8 +72,13 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
   const [scope, setScope] = useState<EditScope>("single");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null = segue a data (futuro nasce a pagar, passado nasce pago).
+  const [settledChoice, setSettledChoice] = useState<boolean | null>(
+    editing ? editing.settled !== false : null,
+  );
 
   const isCredit = type === "despesa" && paymentMethod === "credito";
+  const settled = settledChoice ?? purchaseDate <= todayISO();
   const activeAccounts = accounts.filter((a) => !a.archived || a.id === editing?.account_id);
   const activeCards = cards.filter((c) => !c.archived || c.id === editing?.card_id);
   const effectiveAccountId =
@@ -114,7 +119,9 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
       date: isCredit ? `${billingMonth}-01` : purchaseDate,
       purchase_date: purchaseDate,
       payment_method: type === "receita" ? "dinheiro" : paymentMethod,
-      ...(isCredit ? { card_id: effectiveCardId || null } : { account_id: effectiveAccountId || null }),
+      ...(isCredit
+        ? { card_id: effectiveCardId || null }
+        : { account_id: effectiveAccountId || null, settled }),
     };
 
     if (!isEditing && effectiveMode === "installments") {
@@ -394,6 +401,18 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
           </Field>
         )}
 
+        {!isCredit && (
+          <SwitchRow
+            title={type === "receita" ? "Já recebi" : "Já paguei"}
+            description={
+              settled
+                ? "Entra no saldo da conta."
+                : "Fica em \"a pagar e a receber\" e só entra no saldo depois da baixa."
+            }
+            checked={settled}
+            onChange={setSettledChoice}
+          />
+        )}
         {isCredit && !isEditing && selectedCard && !selectedCard.closingDay && (
           <div className="alert alert-info">
             <IconInfo size={16} />

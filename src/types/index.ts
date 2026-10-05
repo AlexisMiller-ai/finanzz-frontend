@@ -86,6 +86,38 @@ export interface Transaction {
   installment_number?: number | null;
   installment_total?: number | null;
   recurrence_id?: string | null;
+  /** false = conta a pagar ou a receber, ainda fora do saldo. */
+  settled?: boolean;
+  /** Dia em que foi pago/recebido de verdade. */
+  settled_at?: string | null;
+}
+
+/** Item de "a pagar e a receber": lançamento pendente ou fatura fechada sem baixa. */
+export interface UpcomingItem {
+  tipo: "lancamento" | "fatura";
+  id: number | string;
+  descricao: string;
+  valor: number;
+  movimento: TransactionType;
+  vencimento: string;
+  /** Negativo = já venceu; 0 = vence hoje. */
+  emDias: number;
+  origem: string | null;
+  cardId?: number;
+  mes?: string;
+}
+
+export interface UpcomingResponse {
+  dias: number;
+  vencidos: UpcomingItem[];
+  proximos: UpcomingItem[];
+  aindaMaisTarde: number;
+  totais: {
+    aPagarVencido: number;
+    aReceberVencido: number;
+    aPagarProximos: number;
+    aReceberProximos: number;
+  };
 }
 
 export interface DashboardSummary {

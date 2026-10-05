@@ -1144,6 +1144,11 @@ h3 {
   .row-actions {
     display: none;
   }
+  /* Dar baixa é a ação principal de quem tem conta a pagar: fica à mão
+     também no celular, onde as outras ações só aparecem ao abrir o item. */
+  .row-actions.row-actions-always {
+    display: flex;
+  }
 }
 
 /* ---------- Empty / loading ---------- */
