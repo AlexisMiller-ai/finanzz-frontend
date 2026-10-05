@@ -5,7 +5,7 @@ import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
 import type { Account, Card, Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
-import { formatDate, formatDayHeader, formatMonthLabel } from "../utils/date";
+import { formatDate, formatDayHeader, formatMonthLabel, todayISO } from "../utils/date";
 import { formatMoney, formatSignedMoney } from "../utils/money";
 import { ChoiceDialog, Modal } from "../components/Modal";
 import { TransactionFormModal } from "../components/TransactionForm";
@@ -14,6 +14,7 @@ import { Field, FormError, Segmented } from "../components/ui/Form";
 import {
   IconAlert,
   IconCard,
+  IconCheck,
   IconDownload,
   IconUpload,
   IconEdit,
@@ -129,6 +130,11 @@ const PAYMENT_LABEL: Record<PaymentMethod, string> = {
 
 const INSTALLMENT_SUFFIX = /\s*\(\d+\/\d+\)$/;
 
+/** Pendente com a data já passada: é o que mais importa ver na lista. */
+function atrasado(t: Transaction) {
+  return t.settled === false && t.date <= todayISO();
+}
+
 function titleOf(t: Transaction) {
   return (t.description ?? "").replace(INSTALLMENT_SUFFIX, "") || t.category_name || "Sem descrição";
 }
@@ -158,6 +164,7 @@ export function Transactions() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pendente" | "efetivado">("all");
 
   const filtered = useMemo(() => {
     const term = normalize(search.trim());
@@ -170,6 +177,8 @@ export function Transactions() {
           kind === "card" ? t.card_id === Number(id) : t.account_id === Number(id);
         if (!matches) return false;
       }
+      if (statusFilter === "pendente" && t.settled !== false) return false;
+      if (statusFilter === "efetivado" && t.settled === false) return false;
       if (categoryFilter === "none" && t.category_id !== null) return false;
       if (categoryFilter !== "all" && categoryFilter !== "none" && t.category_id !== Number(categoryFilter)) return false;
       if (term) {
@@ -178,7 +187,7 @@ export function Transactions() {
       }
       return true;
     });
-  }, [data, search, typeFilter, categoryFilter, paymentFilter, walletFilter]);
+  }, [data, search, typeFilter, categoryFilter, paymentFilter, walletFilter, statusFilter]);
 
   const stats = useMemo(() => {
     let entradas = 0;
@@ -237,7 +246,12 @@ export function Transactions() {
   }, [filtered, month]);
 
   const hasFilters =
-    search || typeFilter !== "all" || categoryFilter !== "all" || paymentFilter !== "all" || walletFilter !== "all";
+    search ||
+    typeFilter !== "all" ||
+    categoryFilter !== "all" ||
+    paymentFilter !== "all" ||
+    walletFilter !== "all" ||
+    statusFilter !== "all";
 
   function clearFilters() {
     setSearch("");
@@ -245,6 +259,20 @@ export function Transactions() {
     setCategoryFilter("all");
     setPaymentFilter("all");
     setWalletFilter("all");
+    setStatusFilter("all");
+  }
+
+  async function settle(t: Transaction) {
+    setBusy(true);
+    try {
+      await api.put(`/transactions/${t.id}/settle`, { settled: true });
+      toast(t.type === "receita" ? "Marcado como recebido" : "Marcado como pago");
+      notifyDataChanged();
+    } catch (error) {
+      toast(getErrorMessage(error), "error");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDelete(t: Transaction, scope: EditScope) {
@@ -422,6 +450,16 @@ export function Transactions() {
           <option value="debito">Débito</option>
           <option value="credito">Crédito</option>
         </select>
+        <select
+          className="select"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "all" | "pendente" | "efetivado")}
+          aria-label="Filtrar por situação"
+        >
+          <option value="all">Pagos e pendentes</option>
+          <option value="pendente">Só a pagar/receber</option>
+          <option value="efetivado">Só os efetivados</option>
+        </select>
         {hasFilters && (
           <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
             <IconX size={14} /> Limpar
@@ -535,6 +573,17 @@ export function Transactions() {
                           </span>
                         )}
                         {t.recurrence_id && <span className="badge">Fixa</span>}
+                        {t.settled === false && (
+                          <span
+                            className={`badge ${atrasado(t) ? "badge-out" : "badge-warning"}`}
+                          >
+                            {atrasado(t)
+                              ? "atrasado"
+                              : t.type === "receita"
+                                ? "a receber"
+                                : "a pagar"}
+                          </span>
+                        )}
                         {t.transfer_id && <span className="badge badge-primary">Transferência</span>}
                         {(t.account_name || t.card_name) && (
                           <span>· {t.card_name ?? t.account_name}</span>
@@ -544,6 +593,22 @@ export function Transactions() {
                     <div className={`row-amount ${t.type === "receita" ? "text-in" : ""}`}>
                       {formatSignedMoney(Number(t.amount), t.type)}
                     </div>
+                    {t.settled === false && !selecting && (
+                      <div
+                        className="row-actions row-actions-always"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          className="btn btn-icon"
+                          onClick={() => settle(t)}
+                          disabled={busy}
+                          aria-label={t.type === "receita" ? "Marcar como recebido" : "Marcar como pago"}
+                          title={t.type === "receita" ? "Marcar como recebido" : "Marcar como pago"}
+                        >
+                          <IconCheck size={16} />
+                        </button>
+                      </div>
+                    )}
                     <div className="row-actions" onClick={(e) => e.stopPropagation()}>
                       {!t.transfer_id && (
                         <button className="btn btn-icon" onClick={() => setEditing(t)} aria-label="Editar">

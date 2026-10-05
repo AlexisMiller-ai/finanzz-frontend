@@ -6,6 +6,7 @@ import { useApp } from "../contexts/AppContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
+import { UpcomingCard } from "../components/UpcomingCard";
 import { useThemeColors } from "../hooks/useThemeColors";
 import type {
   Account,
@@ -91,6 +92,8 @@ export function Dashboard() {
       ) : (
         <>
           <KpiRow summary={s} />
+
+          <UpcomingCard />
 
           <div className="grid grid-main">
             <PlanningCard summary={s} month={month} onEditGoal={() => setGoalOpen(true)} />
