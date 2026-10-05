@@ -6,6 +6,7 @@ import { useFetch } from "../hooks/useFetch";
 import type { Account, Card, Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
 import { formatMonthShort, getCurrentMonth, shiftMonth, todayISO } from "../utils/date";
 import { formatMoney, numberToCents } from "../utils/money";
+import { pickDefault, setLastUsed } from "../utils/preferences";
 import { Modal } from "./Modal";
 import { Field, FormError, MoneyInput, Segmented } from "./ui/Form";
 import { IconInfo } from "./ui/Icons";
@@ -75,8 +76,9 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
   const isCredit = type === "despesa" && paymentMethod === "credito";
   const activeAccounts = accounts.filter((a) => !a.archived || a.id === editing?.account_id);
   const activeCards = cards.filter((c) => !c.archived || c.id === editing?.card_id);
-  const effectiveAccountId = accountId === null ? (activeAccounts[0]?.id ?? "") : accountId;
-  const effectiveCardId = cardId === null ? (activeCards[0]?.id ?? "") : cardId;
+  const effectiveAccountId =
+    accountId === null ? pickDefault(activeAccounts, "account") : accountId;
+  const effectiveCardId = cardId === null ? pickDefault(activeCards, "card") : cardId;
   const selectedCard = activeCards.find((c) => c.id === effectiveCardId);
   const billingMonth = billingOverride ?? suggestBillingMonth(purchaseDate, selectedCard?.closingDay ?? null);
   const typeCategories = categories.filter((c) => c.type === type);
@@ -135,6 +137,8 @@ export function TransactionFormModal({ editing, onClose, onDelete }: Props) {
         const count = res.data.transactions.length;
         toast(count > 1 ? `${count} lançamentos criados` : "Lançamento adicionado");
       }
+      // Lembra a escolha para o próximo lançamento neste navegador.
+      setLastUsed(isCredit ? "card" : "account", (isCredit ? effectiveCardId : effectiveAccountId) || null);
       notifyDataChanged();
 
       if (keepOpen) {

@@ -5,6 +5,7 @@ import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
 import type { Account, Card } from "../types";
 import { getCurrentMonth, todayISO } from "../utils/date";
+import { pickDefault } from "../utils/preferences";
 import { Modal } from "./Modal";
 import { Field, FormError, MoneyInput } from "./ui/Form";
 import { IconInfo } from "./ui/Icons";
@@ -36,8 +37,8 @@ export function TransferFormModal({ onClose }: { onClose: () => void }) {
   const suggestedFrom =
     (destinationCard?.paymentAccountId &&
       activeAccounts.find((a) => a.id === destinationCard.paymentAccountId)?.id) ||
-    activeAccounts[0]?.id;
-  const effectiveFrom = from === "" ? (suggestedFrom ?? "") : from;
+    pickDefault(activeAccounts, "account");
+  const effectiveFrom = from === "" ? suggestedFrom : from;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

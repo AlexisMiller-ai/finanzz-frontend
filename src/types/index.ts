@@ -26,6 +26,8 @@ export interface Account {
   initialBalance: number;
   balance: number;
   archived: boolean;
+  /** Favorito: vem pré-selecionado nos formulários. */
+  isDefault: boolean;
   transactionCount: number;
 }
 
@@ -39,6 +41,7 @@ export interface Card {
   paymentAccountId: number | null;
   paymentAccountName: string | null;
   archived: boolean;
+  isDefault: boolean;
   /** Tudo que foi gasto menos os pagamentos já lançados. */
   outstanding: number;
   /** Total da fatura do mês consultado. */

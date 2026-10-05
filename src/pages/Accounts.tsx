@@ -110,6 +110,7 @@ export function Accounts() {
                         <div className="row-title">{account.name}</div>
                         <div className="row-meta">
                           {KIND_LABEL[account.kind]} · {account.transactionCount} lançamentos
+                          {account.isDefault && <span className="badge badge-primary">padrão</span>}
                         </div>
                       </div>
                       <div className={`row-amount ${account.balance < 0 ? "text-out" : ""}`}>
@@ -176,7 +177,12 @@ export function Accounts() {
                       <CategoryIcon name={card.name} color={card.color} />
                       <div className="row-main">
                         <div className="category-bar-top">
-                          <span className="row-title">{card.name}</span>
+                          <span className="row-title">
+                            {card.name}
+                            {card.isDefault && (
+                              <span className="badge badge-primary" style={{ marginLeft: 6 }}>padrão</span>
+                            )}
+                          </span>
                           <span className="nowrap tabular">
                             <strong>{formatMoney(card.billTotal)}</strong>
                           </span>
@@ -254,6 +260,7 @@ function AccountModal({ account, onClose }: { account: Account | null; onClose: 
   const [kind, setKind] = useState<AccountKind>(account?.kind ?? "corrente");
   const [cents, setCents] = useState(numberToCents(account?.initialBalance ?? 0));
   const [archived, setArchived] = useState(account?.archived ?? false);
+  const [isDefault, setIsDefault] = useState(account?.isDefault ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -268,6 +275,7 @@ function AccountModal({ account, onClose }: { account: Account | null; onClose: 
         kind,
         initial_balance: cents / 100,
         archived,
+        is_default: isDefault,
       };
       if (account) await api.put(`/accounts/${account.id}`, payload);
       else await api.post("/accounts", payload);
@@ -328,6 +336,12 @@ function AccountModal({ account, onClose }: { account: Account | null; onClose: 
         >
           <MoneyInput id="acc-balance" cents={cents} onChange={setCents} allowNegative />
         </Field>
+        <SwitchRow
+          title="Usar como padrão"
+          description="Vem pré-selecionada ao criar um lançamento, em qualquer dispositivo."
+          checked={isDefault}
+          onChange={setIsDefault}
+        />
         {account && (
           <SwitchRow
             title="Arquivar conta"
@@ -359,6 +373,7 @@ function CardModal({
   const [limit, setLimit] = useState(numberToCents(card?.limitAmount ?? 0));
   const [paymentAccountId, setPaymentAccountId] = useState<number | "">(card?.paymentAccountId ?? "");
   const [archived, setArchived] = useState(card?.archived ?? false);
+  const [cardIsDefault, setCardIsDefault] = useState(card?.isDefault ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -375,6 +390,7 @@ function CardModal({
         limit_amount: limit > 0 ? limit / 100 : null,
         payment_account_id: paymentAccountId || null,
         archived,
+        is_default: cardIsDefault,
       };
       if (card) await api.put(`/cards/${card.id}`, payload);
       else await api.post("/cards", payload);
@@ -459,6 +475,12 @@ function CardModal({
             ))}
           </select>
         </Field>
+        <SwitchRow
+          title="Usar como padrão"
+          description="Vem pré-selecionado nas compras no crédito, em qualquer dispositivo."
+          checked={cardIsDefault}
+          onChange={setCardIsDefault}
+        />
         {card && (
           <SwitchRow
             title="Arquivar cartão"

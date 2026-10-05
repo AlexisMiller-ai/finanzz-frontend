@@ -20,6 +20,7 @@ import {
 } from "../utils/importParsers";
 import { formatDate, formatMonthLabel, getCurrentMonth } from "../utils/date";
 import { formatMoney } from "../utils/money";
+import { pickDefault } from "../utils/preferences";
 import { EmptyState, Skeleton } from "../components/ui/Common";
 import { Field, FormError, Segmented } from "../components/ui/Form";
 import { IconAlert, IconCheck, IconDownload, IconInfo, IconList } from "../components/ui/Icons";
@@ -172,8 +173,8 @@ export function Import() {
       payment_method: isCard ? "credito" : type === "receita" ? "dinheiro" : payment,
     };
     if (isCard) apiRow.purchase_date = row.date;
-    const targetCard = cardId || activeCards[0]?.id;
-    const targetAccount = accountId || activeAccounts[0]?.id;
+    const targetCard = cardId || pickDefault(activeCards, "card");
+    const targetAccount = accountId || pickDefault(activeAccounts, "account");
     if (isCard && targetCard) apiRow.card_id = targetCard;
     if (!isCard && targetAccount) apiRow.account_id = targetAccount;
     if (row.externalId) apiRow.external_id = row.externalId;
@@ -444,7 +445,7 @@ export function Import() {
                     <select
                       id="imp-cartao"
                       className="select"
-                      value={cardId || activeCards[0]?.id || ""}
+                      value={cardId || pickDefault(activeCards, "card")}
                       onChange={(e) => {
                         setCardId(e.target.value ? Number(e.target.value) : "");
                         setItems(null);
@@ -464,7 +465,7 @@ export function Import() {
                     <select
                       id="imp-conta"
                       className="select"
-                      value={accountId || activeAccounts[0]?.id || ""}
+                      value={accountId || pickDefault(activeAccounts, "account")}
                       onChange={(e) => {
                         setAccountId(e.target.value ? Number(e.target.value) : "");
                         setItems(null);
