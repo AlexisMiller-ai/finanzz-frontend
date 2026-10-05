@@ -16,6 +16,39 @@ export interface Category {
   transaction_count?: number;
 }
 
+export type AccountKind = "corrente" | "poupanca" | "dinheiro" | "investimento";
+
+export interface Account {
+  id: number;
+  name: string;
+  kind: AccountKind;
+  color: string;
+  initialBalance: number;
+  balance: number;
+  archived: boolean;
+  /** Favorito: vem pré-selecionado nos formulários. */
+  isDefault: boolean;
+  transactionCount: number;
+}
+
+export interface Card {
+  id: number;
+  name: string;
+  color: string;
+  closingDay: number | null;
+  dueDay: number | null;
+  limitAmount: number | null;
+  paymentAccountId: number | null;
+  paymentAccountName: string | null;
+  archived: boolean;
+  isDefault: boolean;
+  /** Tudo que foi gasto menos os pagamentos já lançados. */
+  outstanding: number;
+  /** Total da fatura do mês consultado. */
+  billTotal: number;
+  transactionCount: number;
+}
+
 export interface Transaction {
   id: number;
   amount: string | number;
@@ -27,6 +60,13 @@ export interface Transaction {
   date: string;
   purchase_date?: string | null;
   payment_method: PaymentMethod;
+  account_id?: number | null;
+  account_name?: string | null;
+  account_color?: string | null;
+  card_id?: number | null;
+  card_name?: string | null;
+  card_color?: string | null;
+  transfer_id?: string | null;
   installment_group_id?: string | null;
   installment_number?: number | null;
   installment_total?: number | null;

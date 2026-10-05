@@ -5,6 +5,7 @@ import { useApp } from "../contexts/AppContext";
 import { getInitials } from "../utils/format";
 import { TransactionFormModal } from "./TransactionForm";
 import {
+  IconWallet,
   IconDashboard,
   IconList,
   IconLogout,
@@ -18,6 +19,7 @@ import {
 const menuItems = [
   { label: "Dashboard", short: "Início", path: "/", Icon: IconDashboard },
   { label: "Lançamentos", short: "Lançamentos", path: "/transacoes", Icon: IconList },
+  { label: "Contas e cartões", short: "Contas", path: "/contas", Icon: IconWallet },
   { label: "Orçamentos", short: "Orçamentos", path: "/metas", Icon: IconTarget },
   { label: "Categorias", short: "Categorias", path: "/categorias", Icon: IconTag },
 ];
@@ -25,6 +27,7 @@ const menuItems = [
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
   "/transacoes": "Lançamentos",
+  "/contas": "Contas e cartões",
   "/metas": "Orçamentos",
   "/categorias": "Categorias",
   "/importar": "Importar",
@@ -154,7 +157,7 @@ export function Layout() {
         <button className="bottom-fab" onClick={() => setQuickAddOpen(true)} aria-label="Novo lançamento">
           <IconPlus size={24} strokeWidth={2.4} />
         </button>
-        {menuItems.slice(2).map(({ short, path, Icon }) => (
+        {menuItems.slice(2, 4).map(({ short, path, Icon }) => (
           <NavLink key={path} to={path} className="bottom-link">
             <Icon size={20} />
             {short}

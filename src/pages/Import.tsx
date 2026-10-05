@@ -4,7 +4,7 @@ import { api, getErrorMessage } from "../services/api";
 import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
-import type { Category, PaymentMethod, Transaction, TransactionType } from "../types";
+import type { Account, Card, Category, PaymentMethod, Transaction, TransactionType } from "../types";
 import { createCategorySuggester } from "../utils/categorySuggestion";
 import {
   type CsvMapping,
@@ -20,6 +20,7 @@ import {
 } from "../utils/importParsers";
 import { formatDate, formatMonthLabel, getCurrentMonth } from "../utils/date";
 import { formatMoney } from "../utils/money";
+import { pickDefault } from "../utils/preferences";
 import { EmptyState, Skeleton } from "../components/ui/Common";
 import { Field, FormError, Segmented } from "../components/ui/Form";
 import { IconAlert, IconCheck, IconDownload, IconInfo, IconList } from "../components/ui/Icons";
@@ -65,6 +66,8 @@ interface ApiRow {
   payment_method: PaymentMethod;
   purchase_date?: string;
   external_id?: string;
+  account_id?: number;
+  card_id?: number;
 }
 
 export function Import() {
@@ -74,11 +77,15 @@ export function Import() {
 
   const { data: categories = [] } = useFetch<Category[]>("/categories");
   const { data: history } = useFetch<Transaction[]>("/transactions");
+  const { data: accounts = [] } = useFetch<Account[]>("/accounts");
+  const { data: cards = [] } = useFetch<Card[]>("/cards");
 
   const [fileName, setFileName] = useState("");
   const [source, setSource] = useState<Source>("extrato");
   const [billingMonth, setBillingMonth] = useState(month || getCurrentMonth());
   const [payment, setPayment] = useState<PaymentMethod>("debito");
+  const [accountId, setAccountId] = useState<number | "">("");
+  const [cardId, setCardId] = useState<number | "">("");
   const [table, setTable] = useState<CsvTable | null>(null);
   const [mapping, setMapping] = useState<CsvMapping | null>(null);
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
@@ -104,6 +111,9 @@ export function Import() {
    * (Nubank) e negativo nos OFX de cartão. O sinal que domina o arquivo é o das
    * compras; o outro é pagamento da fatura ou estorno, que não é despesa.
    */
+  const activeAccounts = accounts.filter((a) => !a.archived);
+  const activeCards = cards.filter((c) => !c.archived);
+
   const purchaseSign = useMemo(() => {
     const negatives = parsedRows.filter((r) => r.amount < 0).length;
     return negatives > parsedRows.length - negatives ? -1 : 1;
@@ -163,6 +173,10 @@ export function Import() {
       payment_method: isCard ? "credito" : type === "receita" ? "dinheiro" : payment,
     };
     if (isCard) apiRow.purchase_date = row.date;
+    const targetCard = cardId || pickDefault(activeCards, "card");
+    const targetAccount = accountId || pickDefault(activeAccounts, "account");
+    if (isCard && targetCard) apiRow.card_id = targetCard;
+    if (!isCard && targetAccount) apiRow.account_id = targetAccount;
     if (row.externalId) apiRow.external_id = row.externalId;
     return apiRow;
   }
@@ -425,6 +439,48 @@ export function Import() {
                     ]}
                   />
                 </Field>
+
+                {source === "fatura" ? (
+                  <Field label="Cartão" htmlFor="imp-cartao">
+                    <select
+                      id="imp-cartao"
+                      className="select"
+                      value={cardId || pickDefault(activeCards, "card")}
+                      onChange={(e) => {
+                        setCardId(e.target.value ? Number(e.target.value) : "");
+                        setItems(null);
+                      }}
+                      style={{ maxWidth: 260 }}
+                    >
+                      {activeCards.length === 0 && <option value="">Cartão de crédito</option>}
+                      {activeCards.map((card) => (
+                        <option key={card.id} value={card.id}>
+                          {card.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : (
+                  <Field label="Conta" htmlFor="imp-conta">
+                    <select
+                      id="imp-conta"
+                      className="select"
+                      value={accountId || pickDefault(activeAccounts, "account")}
+                      onChange={(e) => {
+                        setAccountId(e.target.value ? Number(e.target.value) : "");
+                        setItems(null);
+                      }}
+                      style={{ maxWidth: 260 }}
+                    >
+                      {activeAccounts.length === 0 && <option value="">Conta principal</option>}
+                      {activeAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
 
                 {source === "fatura" ? (
                   <Field label="Mês da fatura" htmlFor="imp-fatura">

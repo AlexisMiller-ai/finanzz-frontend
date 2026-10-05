@@ -7,7 +7,15 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
 import { useThemeColors } from "../hooks/useThemeColors";
-import type { Budget, DashboardSummary, DistributionItem, EvolutionPoint, Transaction } from "../types";
+import type {
+  Account,
+  Budget,
+  Card,
+  DashboardSummary,
+  DistributionItem,
+  EvolutionPoint,
+  Transaction,
+} from "../types";
 import {
   formatDate,
   formatMonthLabel,
@@ -48,6 +56,8 @@ export function Dashboard() {
   const upcoming = useFetch<EvolutionPoint[]>(`/dashboard/evolution?from=${shiftMonth(month, 1)}&months=3`);
   const distribution = useFetch<DistributionItem[]>(`/dashboard/distribution?month=${month}`);
   const budgets = useFetch<Budget[]>(`/budgets?month=${month}`);
+  const accounts = useFetch<Account[]>("/accounts");
+  const cards = useFetch<Card[]>(`/cards?month=${month}`);
   const transactions = useFetch<Transaction[]>(`/transactions?month=${month}`);
 
   const s = summary.data;
@@ -84,8 +94,10 @@ export function Dashboard() {
 
           <div className="grid grid-main">
             <PlanningCard summary={s} month={month} onEditGoal={() => setGoalOpen(true)} />
-            <SavingsCard
+            <MoneyCard
               summary={s}
+              accounts={accounts.data}
+              cards={cards.data}
               upcoming={upcoming.data}
               month={month}
               onEdit={() => setSavingsOpen(true)}
@@ -245,7 +257,7 @@ function PlanningCard({
             {s.availableToSpend < 0
               ? "Você passou do planejado neste mês"
               : perDay !== null && month === getCurrentMonth()
-                ? `≈ ${formatMoney(perDay)} por dia nos ${days} dias restantes`
+                ? `≈ ${formatMoney(perDay)} por dia ${days === 1 ? "no último dia do mês" : `nos ${days} dias restantes`}`
                 : "entradas − meta − saídas"}
           </div>
         </div>
@@ -280,60 +292,93 @@ function PlanningCard({
 
 /* ---------------- Total guardado ---------------- */
 
-function SavingsCard({
+function MoneyCard({
   summary: s,
+  accounts,
+  cards,
   upcoming,
   month,
   onEdit,
 }: {
   summary?: DashboardSummary;
+  accounts?: Account[];
+  cards?: Card[];
   upcoming?: EvolutionPoint[];
   month: string;
   onEdit: () => void;
 }) {
-  if (!s) {
+  if (!s || !accounts) {
     return (
       <div className="card">
         <Skeleton width={120} height={14} />
         <Skeleton width="70%" height={28} style={{ marginTop: 12 }} />
-        <Skeleton height={60} style={{ marginTop: 20 }} />
+        <Skeleton height={80} style={{ marginTop: 20 }} />
       </div>
     );
   }
 
-  const committed = (upcoming ?? []).filter((p) => p.saidas > 0);
+  const active = accounts.filter((a) => !a.archived);
+  const total = active.reduce((sum, a) => sum + a.balance, 0);
+  const activeCards = (cards ?? []).filter((c) => !c.archived && (c.billTotal > 0 || c.outstanding > 0));
+  const committed = (upcoming ?? []).filter((p) => p.saidas > 0).slice(0, 2);
 
   return (
-    <div className="card">
-      <div className="card-header" style={{ marginBottom: 8 }}>
-        <div className="plan-item-label">
-          <IconPiggy size={15} /> Total guardado
-        </div>
-        <button className="btn btn-icon" onClick={onEdit} aria-label="Ajustar total guardado" title="Ajustar valor">
-          <IconEdit size={15} />
-        </button>
-      </div>
-      <div className={`kpi-value ${s.saldoGeralAcumulado < 0 ? "text-out" : ""}`} style={{ fontSize: 28 }}>
-        {formatMoney(s.saldoGeralAcumulado)}
-      </div>
-      <div className="field-hint">
-        Desde {formatMonthShort(s.savingsStartDate, true).toLowerCase()}, com lançamentos até hoje
-      </div>
-
-      <div className="divider" style={{ margin: "16px 0 12px" }} />
-
-      <div className="list compact">
-        <div className="list-row">
-          <span className="kpi-icon"><IconCard size={15} /></span>
-          <div className="row-main">
-            <div className="row-title">Fatura do cartão</div>
-            <div className="row-meta">{formatMonthLabel(month)}</div>
+    <div className="card card-flush">
+      <div className="card-header">
+        <div>
+          <div className="plan-item-label">
+            <IconWallet size={15} /> Saldo em contas
           </div>
-          <div className="row-amount">{formatMoney(s.cartaoCreditoPeriodo)}</div>
+          <div className="kpi-value" style={{ fontSize: 28, marginTop: 2 }}>
+            {formatMoney(total)}
+          </div>
         </div>
+        <Link to="/contas" className="link-btn">Gerenciar</Link>
+      </div>
+
+      <div className="list">
+        {active.length === 0 ? (
+          <div className="list-row">
+            <div className="row-main">
+              <div className="row-meta">Nenhuma conta cadastrada</div>
+            </div>
+            <Link to="/contas" className="link-btn">Cadastrar</Link>
+          </div>
+        ) : (
+          active.slice(0, 4).map((account) => (
+            <div className="list-row" key={account.id}>
+              <span className="dot" style={{ background: account.color }} />
+              <div className="row-main">
+                <div className="row-title">{account.name}</div>
+              </div>
+              <div className={`row-amount ${account.balance < 0 ? "text-out" : ""}`}>
+                {formatMoney(account.balance)}
+              </div>
+            </div>
+          ))
+        )}
+
+        {activeCards.map((card) => (
+          <div className="list-row" key={`card-${card.id}`}>
+            <span className="kpi-icon" style={{ width: 26, height: 26 }}>
+              <IconCard size={14} />
+            </span>
+            <div className="row-main">
+              <div className="row-title">{card.name}</div>
+              <div className="row-meta">
+                fatura de {formatMonthLabel(month).toLowerCase()}
+                {card.dueDay ? ` · vence dia ${card.dueDay}` : ""}
+              </div>
+            </div>
+            <div className="row-amount">{formatMoney(card.billTotal)}</div>
+          </div>
+        ))}
+
         {committed.map((p) => (
           <div className="list-row" key={p.month}>
-            <span className="kpi-icon"><IconArrowDown size={15} /></span>
+            <span className="kpi-icon" style={{ width: 26, height: 26 }}>
+              <IconArrowDown size={14} />
+            </span>
             <div className="row-main">
               <div className="row-title">Já comprometido</div>
               <div className="row-meta">{formatMonthLabel(p.month)}</div>
@@ -341,6 +386,24 @@ function SavingsCard({
             <div className="row-amount">{formatMoney(p.saidas)}</div>
           </div>
         ))}
+
+        <div className="list-row">
+          <span className="kpi-icon" style={{ width: 26, height: 26 }}>
+            <IconPiggy size={14} />
+          </span>
+          <div className="row-main">
+            <div className="row-title">Total guardado</div>
+            <div className="row-meta">
+              desde {formatMonthShort(s.savingsStartDate, true).toLowerCase()}
+            </div>
+          </div>
+          <div className={`row-amount ${s.saldoGeralAcumulado < 0 ? "text-out" : ""}`}>
+            {formatMoney(s.saldoGeralAcumulado)}
+          </div>
+          <button className="btn btn-icon" onClick={onEdit} aria-label="Ajustar total guardado">
+            <IconEdit size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );

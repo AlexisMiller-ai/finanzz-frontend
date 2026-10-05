@@ -1,20 +1,46 @@
-const CLOSING_DAY_KEY = "finanzz_card_closing_day";
+/**
+ * Última conta e último cartão usados, lembrados neste navegador.
+ * Servem como sugestão quando não há favorito definido na conta do usuário.
+ */
+const KEYS = {
+  account: "finanzz_last_account",
+  card: "finanzz_last_card",
+} as const;
 
-/** Dia de fechamento da fatura do cartão (1-31), guardado neste navegador. */
-export function getCardClosingDay(): number | null {
+export type WalletKind = keyof typeof KEYS;
+
+export function getLastUsed(kind: WalletKind): number | null {
   try {
-    const value = Number(localStorage.getItem(CLOSING_DAY_KEY));
-    return Number.isInteger(value) && value >= 1 && value <= 31 ? value : null;
+    const value = Number(localStorage.getItem(KEYS[kind]));
+    return Number.isInteger(value) && value > 0 ? value : null;
   } catch {
     return null;
   }
 }
 
-export function setCardClosingDay(day: number | null) {
+export function setLastUsed(kind: WalletKind, id: number | null) {
   try {
-    if (day) localStorage.setItem(CLOSING_DAY_KEY, String(day));
-    else localStorage.removeItem(CLOSING_DAY_KEY);
+    if (id) localStorage.setItem(KEYS[kind], String(id));
+    else localStorage.removeItem(KEYS[kind]);
   } catch {
-    // sem armazenamento disponível
+    // armazenamento indisponível (modo privado): segue sem lembrar
   }
+}
+
+/**
+ * Qual conta/cartão vem pré-selecionado: o favorito (vale em qualquer
+ * dispositivo), senão o último usado aqui, senão o primeiro da lista.
+ */
+export function pickDefault<T extends { id: number; isDefault?: boolean }>(
+  items: T[],
+  kind: WalletKind,
+): number | "" {
+  if (items.length === 0) return "";
+  const favorite = items.find((item) => item.isDefault);
+  if (favorite) return favorite.id;
+
+  const lastUsed = getLastUsed(kind);
+  if (lastUsed && items.some((item) => item.id === lastUsed)) return lastUsed;
+
+  return items[0]!.id;
 }

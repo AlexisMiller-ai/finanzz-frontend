@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, getErrorMessage } from "../services/api";
 import { useApp } from "../contexts/AppContext";
 import type { ThemePreference } from "../contexts/AppContext";
@@ -7,7 +7,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import type { User } from "../types";
 import { getInitials } from "../utils/format";
-import { getCardClosingDay, setCardClosingDay } from "../utils/preferences";
 import { Field, FormError, Segmented } from "../components/ui/Form";
 import { IconLogout } from "../components/ui/Icons";
 
@@ -26,8 +25,6 @@ export function Profile() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-
-  const [closingDay, setClosingDay] = useState(() => String(getCardClosingDay() ?? ""));
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -62,12 +59,6 @@ export function Profile() {
     } finally {
       setSavingPassword(false);
     }
-  }
-
-  function saveClosingDay(value: string) {
-    setClosingDay(value);
-    const day = Number(value);
-    setCardClosingDay(Number.isInteger(day) && day >= 1 && day <= 31 ? day : null);
   }
 
   return (
@@ -112,7 +103,7 @@ export function Profile() {
         <div className="card-header">
           <div>
             <h2 className="card-title">Preferências</h2>
-            <p className="card-subtitle">Salvas neste dispositivo</p>
+            <p className="card-subtitle">O dia de fechamento agora fica em cada cartão</p>
           </div>
         </div>
         <div className="form-stack">
@@ -128,22 +119,18 @@ export function Profile() {
               ]}
             />
           </Field>
-          <Field
-            label="Dia de fechamento da fatura do cartão"
-            htmlFor="closing-day"
-            hint="Compras feitas a partir desse dia são sugeridas para a fatura do mês seguinte. Deixe vazio para usar o mês da compra."
-          >
-            <input
-              id="closing-day"
-              className="input"
-              type="number"
-              min={1}
-              max={31}
-              placeholder="Ex.: 25"
-              value={closingDay}
-              onChange={(e) => saveClosingDay(e.target.value)}
-              style={{ maxWidth: 140 }}
-            />
+          <Field label="Atalhos">
+            <div className="page-actions">
+              <Link className="btn btn-secondary btn-sm" to="/contas">
+                Contas e cartões
+              </Link>
+              <Link className="btn btn-secondary btn-sm" to="/categorias">
+                Categorias
+              </Link>
+              <Link className="btn btn-secondary btn-sm" to="/importar">
+                Importar extrato
+              </Link>
+            </div>
           </Field>
         </div>
       </div>

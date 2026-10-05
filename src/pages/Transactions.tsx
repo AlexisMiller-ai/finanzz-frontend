@@ -4,7 +4,7 @@ import { api, getErrorMessage } from "../services/api";
 import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
-import type { Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
+import type { Account, Card, Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
 import { formatDate, formatDayHeader, formatMonthLabel } from "../utils/date";
 import { formatMoney, formatSignedMoney } from "../utils/money";
 import { ChoiceDialog } from "../components/Modal";
@@ -45,11 +45,15 @@ export function Transactions() {
   const toast = useToast();
   const { data, loading, error, reload } = useFetch<Transaction[]>(`/transactions?month=${month}`);
   const { data: categories = [] } = useFetch<Category[]>("/categories");
+  const { data: accounts = [] } = useFetch<Account[]>("/accounts");
+  const { data: cards = [] } = useFetch<Card[]>("/cards");
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | TransactionType>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState<"all" | PaymentMethod>("all");
+  // "account:3" ou "card:2"
+  const [walletFilter, setWalletFilter] = useState("all");
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +63,12 @@ export function Transactions() {
     return (data ?? []).filter((t) => {
       if (typeFilter !== "all" && t.type !== typeFilter) return false;
       if (paymentFilter !== "all" && t.payment_method !== paymentFilter) return false;
+      if (walletFilter !== "all") {
+        const [kind, id] = walletFilter.split(":");
+        const matches =
+          kind === "card" ? t.card_id === Number(id) : t.account_id === Number(id);
+        if (!matches) return false;
+      }
       if (categoryFilter === "none" && t.category_id !== null) return false;
       if (categoryFilter !== "all" && categoryFilter !== "none" && t.category_id !== Number(categoryFilter)) return false;
       if (term) {
@@ -67,13 +77,15 @@ export function Transactions() {
       }
       return true;
     });
-  }, [data, search, typeFilter, categoryFilter, paymentFilter]);
+  }, [data, search, typeFilter, categoryFilter, paymentFilter, walletFilter]);
 
   const stats = useMemo(() => {
     let entradas = 0;
     let saidas = 0;
     let cartao = 0;
     for (const t of filtered) {
+      // Transferência não é receita nem despesa: o dinheiro só mudou de lugar.
+      if (t.transfer_id) continue;
       const value = Number(t.amount);
       if (t.type === "receita") entradas += value;
       else {
@@ -113,20 +125,25 @@ export function Transactions() {
       result.push({
         key: date,
         label: formatDayHeader(date),
-        total: items.reduce((acc, t) => acc + (t.type === "receita" ? 1 : -1) * Number(t.amount), 0),
+        total: items.reduce(
+          (acc, t) => acc + (t.transfer_id ? 0 : (t.type === "receita" ? 1 : -1) * Number(t.amount)),
+          0,
+        ),
         items,
       });
     }
     return result;
   }, [filtered, month]);
 
-  const hasFilters = search || typeFilter !== "all" || categoryFilter !== "all" || paymentFilter !== "all";
+  const hasFilters =
+    search || typeFilter !== "all" || categoryFilter !== "all" || paymentFilter !== "all" || walletFilter !== "all";
 
   function clearFilters() {
     setSearch("");
     setTypeFilter("all");
     setCategoryFilter("all");
     setPaymentFilter("all");
+    setWalletFilter("all");
   }
 
   async function handleDelete(t: Transaction, scope: EditScope) {
@@ -250,6 +267,28 @@ export function Transactions() {
         </select>
         <select
           className="select"
+          value={walletFilter}
+          onChange={(e) => setWalletFilter(e.target.value)}
+          aria-label="Filtrar por conta ou cartão"
+        >
+          <option value="all">Todas as contas</option>
+          {accounts
+            .filter((a) => !a.archived)
+            .map((a) => (
+              <option key={`account:${a.id}`} value={`account:${a.id}`}>
+                {a.name}
+              </option>
+            ))}
+          {cards
+            .filter((c) => !c.archived)
+            .map((c) => (
+              <option key={`card:${c.id}`} value={`card:${c.id}`}>
+                Cartão · {c.name}
+              </option>
+            ))}
+        </select>
+        <select
+          className="select"
           value={paymentFilter}
           onChange={(e) => setPaymentFilter(e.target.value as "all" | PaymentMethod)}
           aria-label="Filtrar por forma de pagamento"
@@ -308,16 +347,20 @@ export function Transactions() {
               </div>
               <div className="list">
                 {group.items.map((t) => (
-                  <div key={t.id} className="list-row clickable" onClick={() => setEditing(t)}>
+                  <div
+                    key={t.id}
+                    className="list-row clickable"
+                    onClick={() => (t.transfer_id ? setDeleting(t) : setEditing(t))}
+                  >
                     <CategoryIcon name={t.category_name ?? t.description} color={t.category_color} />
                     <div className="row-main">
                       <div className="row-title">{titleOf(t)}</div>
                       <div className="row-meta">
-                        <span>{t.category_name ?? "Sem categoria"}</span>
+                        {!t.transfer_id && <span>{t.category_name ?? "Sem categoria"}</span>}
                         {t.payment_method === "credito" && t.purchase_date && (
                           <span>· compra em {formatDate(t.purchase_date)}</span>
                         )}
-                        {t.type === "despesa" && t.payment_method !== "credito" && (
+                        {!t.transfer_id && t.type === "despesa" && t.payment_method !== "credito" && (
                           <span>· {PAYMENT_LABEL[t.payment_method]}</span>
                         )}
                         {t.installment_total && (
@@ -326,15 +369,21 @@ export function Transactions() {
                           </span>
                         )}
                         {t.recurrence_id && <span className="badge">Fixa</span>}
+                        {t.transfer_id && <span className="badge badge-primary">Transferência</span>}
+                        {(t.account_name || t.card_name) && (
+                          <span>· {t.card_name ?? t.account_name}</span>
+                        )}
                       </div>
                     </div>
                     <div className={`row-amount ${t.type === "receita" ? "text-in" : ""}`}>
                       {formatSignedMoney(Number(t.amount), t.type)}
                     </div>
                     <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                      <button className="btn btn-icon" onClick={() => setEditing(t)} aria-label="Editar">
-                        <IconEdit size={16} />
-                      </button>
+                      {!t.transfer_id && (
+                        <button className="btn btn-icon" onClick={() => setEditing(t)} aria-label="Editar">
+                          <IconEdit size={16} />
+                        </button>
+                      )}
                       <button className="btn btn-icon danger" onClick={() => setDeleting(t)} aria-label="Excluir">
                         <IconTrash size={16} />
                       </button>
@@ -369,7 +418,19 @@ export function Transactions() {
         />
       )}
 
-      {deleting &&
+      {deleting && deleting.transfer_id && (
+        <ChoiceDialog
+          title="Excluir transferência?"
+          description="As duas pontas são excluídas e os saldos das contas voltam ao que eram."
+          busy={busy}
+          onClose={() => setDeleting(null)}
+          options={[
+            { label: "Excluir transferência", variant: "danger", onSelect: () => handleDelete(deleting, "single") },
+          ]}
+        />
+      )}
+
+      {deleting && !deleting.transfer_id &&
         (isGroup(deleting) ? (
           <ChoiceDialog
             title="Excluir lançamento"
