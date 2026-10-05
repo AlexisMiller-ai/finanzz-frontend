@@ -42,8 +42,10 @@ export interface Card {
   paymentAccountName: string | null;
   archived: boolean;
   isDefault: boolean;
-  /** Tudo que foi gasto menos os pagamentos já lançados. */
+  /** Dívida até a fatura do mês atual, já descontados os pagamentos. */
   outstanding: number;
+  /** Parcelas que ainda vão cair em faturas futuras. */
+  futureInstallments: number;
   /** Total da fatura do mês consultado. */
   billTotal: number;
   transactionCount: number;

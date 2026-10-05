@@ -368,6 +368,9 @@ function MoneyCard({
               <div className="row-meta">
                 fatura de {formatMonthLabel(month).toLowerCase()}
                 {card.dueDay ? ` · vence dia ${card.dueDay}` : ""}
+                {card.futureInstallments > 0 && (
+                  <span>· {formatMoney(card.futureInstallments)} em parcelas futuras</span>
+                )}
               </div>
             </div>
             <div className="row-amount">{formatMoney(card.billTotal)}</div>

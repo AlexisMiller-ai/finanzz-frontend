@@ -1727,6 +1727,18 @@ h3 {
   }
 }
 
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 13px;
+}
+
 /* ---------- Misc ---------- */
 
 .divider {
