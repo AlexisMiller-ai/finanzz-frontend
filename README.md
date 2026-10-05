@@ -40,6 +40,7 @@ src/
 - **Contas e cartões**: todo lançamento fica numa conta (dinheiro que você tem) ou num cartão (dívida que se acumula), nunca nos dois. O saldo da conta parte do saldo inicial e considera lançamentos até hoje.
 - **Cartão de crédito**: `date` é o 1º dia do mês da fatura e `purchase_date` a data real da compra. Com o dia de fechamento do cartão preenchido, a fatura é sugerida automaticamente.
 - **Transferência** (entre contas ou pagando a fatura) grava duas pontas ligadas: muda os saldos, mas não conta como receita nem despesa.
+- **Faturas** (ícone de calendário no cartão, em Contas e cartões): lista mês a mês com a situação de cada fatura. A que ainda recebe compras é a "aberta" — depois do dia de fechamento, já é a do mês seguinte. Dar baixa tira a fatura da dívida, de três jeitos: pagando de uma conta (cria a transferência), marcando que foi paga fora do app, ou só registrando que o pagamento já estava lançado. Quem está começando com faturas antigas já pagas usa "dar baixa em todas de uma vez".
 - **Ajustar saldo**: informe quanto a conta tem hoje e o saldo inicial é recalculado para bater, igual ao ajuste do total guardado.
 - **Mover em lote**: em Lançamentos, "Selecionar" liga as caixas de seleção e "Mover para..." troca a conta ou o cartão de vários de uma vez (conta só vai para conta, cartão só para cartão).
 - **Parcelada** divide o total em N lançamentos mensais; **Fixa mensal** repete o mesmo valor por N meses. Edição e exclusão podem valer para "só este", "este e os próximos" ou "todos".
