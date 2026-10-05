@@ -16,6 +16,7 @@ import {
   IconEdit,
   IconPlus,
   IconRepeat,
+  IconTarget,
   IconTrash,
   IconWallet,
 } from "../components/ui/Icons";
@@ -36,6 +37,7 @@ export function Accounts() {
   const [editingCard, setEditingCard] = useState<Card | "new" | null>(null);
   const [deleting, setDeleting] = useState<{ kind: "account" | "card"; item: Account | Card } | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [adjusting, setAdjusting] = useState<Account | null>(null);
 
   const activeAccounts = (accounts.data ?? []).filter((a) => !a.archived);
   const archivedAccounts = (accounts.data ?? []).filter((a) => a.archived);
@@ -78,7 +80,8 @@ export function Accounts() {
               {accounts.data ? formatMoney(total) : <Skeleton width={180} height={30} />}
             </div>
             <div className="field-hint">
-              Soma das contas ativas, considerando lançamentos até hoje
+              Soma das contas ativas, considerando lançamentos até hoje. Se não bater com o app do
+              banco, use o botão de ajustar saldo na conta.
             </div>
           </div>
 
@@ -117,6 +120,14 @@ export function Accounts() {
                         {formatMoney(account.balance)}
                       </div>
                       <div className="row-actions" style={{ display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn btn-icon"
+                          onClick={() => setAdjusting(account)}
+                          aria-label={`Ajustar saldo de ${account.name}`}
+                          title="Ajustar saldo"
+                        >
+                          <IconTarget size={16} />
+                        </button>
                         <button className="btn btn-icon" onClick={() => setEditingAccount(account)} aria-label={`Editar ${account.name}`}>
                           <IconEdit size={16} />
                         </button>
@@ -195,15 +206,27 @@ export function Accounts() {
                             />
                             <div className="row-meta" style={{ justifyContent: "space-between" }}>
                               <span>
-                                {formatMoney(card.outstanding)} usados de {formatMoney(card.limitAmount)}
+                                {formatMoney(card.outstanding)} em aberto de {formatMoney(card.limitAmount)}
                               </span>
                               <span>{cardDaysLabel(card)}</span>
                             </div>
+                            {card.futureInstallments > 0 && (
+                              <div className="row-meta">
+                                + {formatMoney(card.futureInstallments)} em parcelas de faturas futuras
+                              </div>
+                            )}
                           </>
                         ) : (
-                          <div className="row-meta">
-                            {formatMoney(card.outstanding)} em aberto · {cardDaysLabel(card)}
-                          </div>
+                          <>
+                            <div className="row-meta">
+                              {formatMoney(card.outstanding)} em aberto · {cardDaysLabel(card)}
+                            </div>
+                            {card.futureInstallments > 0 && (
+                              <div className="row-meta">
+                                + {formatMoney(card.futureInstallments)} em parcelas de faturas futuras
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="row-actions" style={{ display: "flex" }} onClick={(e) => e.stopPropagation()}>
@@ -242,6 +265,7 @@ export function Accounts() {
       )}
       {deleting && <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />}
       {transferOpen && <TransferFormModal onClose={() => setTransferOpen(false)} />}
+      {adjusting && <AdjustBalanceModal account={adjusting} onClose={() => setAdjusting(null)} />}
     </div>
   );
 }
@@ -251,6 +275,51 @@ function cardDaysLabel(card: Card) {
   if (card.closingDay) parts.push(`fecha dia ${card.closingDay}`);
   if (card.dueDay) parts.push(`vence dia ${card.dueDay}`);
   return parts.join(" · ") || "sem datas definidas";
+}
+
+function AdjustBalanceModal({ account, onClose }: { account: Account; onClose: () => void }) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [cents, setCents] = useState(numberToCents(account.balance));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.put(`/accounts/${account.id}/balance`, { current_balance: cents / 100 });
+      toast("Saldo ajustado");
+      notifyDataChanged();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Ajustar saldo · ${account.name}`}
+      description="Informe quanto você tem nessa conta hoje, como está no app do banco. O saldo inicial é recalculado para bater, e os próximos lançamentos continuam somando a partir daí."
+      onClose={onClose}
+      size="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <span className="spinner" /> : "Ajustar"}
+        </button>
+      }
+    >
+      <div className="form-stack">
+        <Field label="Saldo de hoje" htmlFor="adj-balance" hint="Para conta negativa, digite um sinal de menos.">
+          <MoneyInput id="adj-balance" cents={cents} onChange={setCents} large autoFocus allowNegative />
+        </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
+  );
 }
 
 function AccountModal({ account, onClose }: { account: Account | null; onClose: () => void }) {

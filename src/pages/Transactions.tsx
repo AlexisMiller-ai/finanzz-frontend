@@ -7,10 +7,10 @@ import { useFetch } from "../hooks/useFetch";
 import type { Account, Card, Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
 import { formatDate, formatDayHeader, formatMonthLabel } from "../utils/date";
 import { formatMoney, formatSignedMoney } from "../utils/money";
-import { ChoiceDialog } from "../components/Modal";
+import { ChoiceDialog, Modal } from "../components/Modal";
 import { TransactionFormModal } from "../components/TransactionForm";
 import { CategoryIcon, EmptyState, MonthSwitcher, Skeleton } from "../components/ui/Common";
-import { Segmented } from "../components/ui/Form";
+import { Field, FormError, Segmented } from "../components/ui/Form";
 import {
   IconAlert,
   IconCard,
@@ -23,6 +23,103 @@ import {
   IconTrash,
   IconX,
 } from "../components/ui/Icons";
+
+function MoveModal({
+  ids,
+  kind,
+  accounts,
+  cards,
+  onClose,
+  onDone,
+}: {
+  ids: number[];
+  kind: "account" | "card" | "mixed";
+  accounts: Account[];
+  cards: Card[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { notifyDataChanged } = useApp();
+  const toast = useToast();
+  const [target, setTarget] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!target) return setError("Escolha o destino.");
+    const [destino, id] = target.split(":");
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.post<{ moved: number; skipped: number }>("/transactions/move", {
+        ids,
+        ...(destino === "card" ? { card_id: Number(id) } : { account_id: Number(id) }),
+      });
+      toast(
+        res.data.skipped > 0
+          ? `${res.data.moved} movidos · ${res.data.skipped} ignorados por serem de outro tipo`
+          : `${res.data.moved} lançamentos movidos`,
+      );
+      notifyDataChanged();
+      onDone();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err, "Não consegui mover os lançamentos."));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Mover ${ids.length} ${ids.length === 1 ? "lançamento" : "lançamentos"}`}
+      description="Lançamento de conta só vai para outra conta, e de cartão só para outro cartão."
+      onClose={onClose}
+      size="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <span className="spinner" /> : "Mover"}
+        </button>
+      }
+    >
+      <div className="form-stack">
+        {kind === "mixed" && (
+          <div className="alert alert-warning">
+            <IconAlert size={16} />
+            <span>
+              A seleção tem lançamentos de conta e de cartão. Só os compatíveis com o destino serão
+              movidos.
+            </span>
+          </div>
+        )}
+        <Field label="Destino" htmlFor="move-target">
+          <select
+            id="move-target"
+            className="select"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+          >
+            <option value="">Escolha...</option>
+            {kind !== "card" &&
+              accounts.map((a) => (
+                <option key={`account:${a.id}`} value={`account:${a.id}`}>
+                  {a.name}
+                </option>
+              ))}
+            {kind !== "account" &&
+              cards.map((c) => (
+                <option key={`card:${c.id}`} value={`card:${c.id}`}>
+                  Cartão · {c.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
+  );
+}
 
 const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   dinheiro: "Pix/Dinheiro",
@@ -57,6 +154,10 @@ export function Transactions() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [busy, setBusy] = useState(false);
+  // Modo de seleção para mover vários lançamentos de conta/cartão de uma vez.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [moveOpen, setMoveOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const term = normalize(search.trim());
@@ -188,6 +289,22 @@ export function Transactions() {
 
   const isGroup = (t: Transaction) => !!(t.installment_group_id || t.recurrence_id);
 
+  function toggleSelected(id: number) {
+    setSelected((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  }
+
+  function leaveSelection() {
+    setSelecting(false);
+    setSelected([]);
+  }
+
+  const selectedItems = filtered.filter((t) => selected.includes(t.id));
+  const selectionKind = selectedItems.every((t) => t.card_id)
+    ? "card"
+    : selectedItems.every((t) => t.account_id)
+      ? "account"
+      : "mixed";
+
   return (
     <div className="page">
       <div className="page-header">
@@ -202,6 +319,13 @@ export function Transactions() {
           </Link>
           <button className="btn btn-secondary hide-mobile" onClick={exportCsv} disabled={filtered.length === 0}>
             <IconDownload size={16} /> Exportar
+          </button>
+          <button
+            className="btn btn-secondary hide-mobile"
+            onClick={() => (selecting ? leaveSelection() : setSelecting(true))}
+            disabled={!data || data.length === 0}
+          >
+            {selecting ? "Cancelar seleção" : "Selecionar"}
           </button>
           <button className="btn btn-primary hide-mobile" onClick={() => setQuickAddOpen(true)}>
             <IconPlus size={16} /> Novo
@@ -305,6 +429,31 @@ export function Transactions() {
         )}
       </div>
 
+      {selecting && (
+        <div className="selection-bar">
+          <span>
+            <strong>{selected.length}</strong> {selected.length === 1 ? "selecionado" : "selecionados"}
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelected(filtered.map((t) => t.id))}>
+            Selecionar os {filtered.length} filtrados
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelected([])}>
+            Limpar
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            style={{ marginLeft: "auto" }}
+            disabled={selected.length === 0}
+            onClick={() => setMoveOpen(true)}
+          >
+            Mover para...
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={leaveSelection}>
+            Sair
+          </button>
+        </div>
+      )}
+
       <div className="card card-flush" style={{ overflow: "hidden", opacity: loading && data ? 0.6 : 1 }}>
         {error && !data ? (
           <EmptyState
@@ -350,9 +499,26 @@ export function Transactions() {
                   <div
                     key={t.id}
                     className="list-row clickable"
-                    onClick={() => (t.transfer_id ? setDeleting(t) : setEditing(t))}
+                    onClick={() =>
+                      selecting
+                        ? toggleSelected(t.id)
+                        : t.transfer_id
+                          ? setDeleting(t)
+                          : setEditing(t)
+                    }
                   >
-                    <CategoryIcon name={t.category_name ?? t.description} color={t.category_color} />
+                    {selecting ? (
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(t.id)}
+                        onChange={() => toggleSelected(t.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Selecionar ${titleOf(t)}`}
+                        style={{ width: 16, height: 16, flexShrink: 0 }}
+                      />
+                    ) : (
+                      <CategoryIcon name={t.category_name ?? t.description} color={t.category_color} />
+                    )}
                     <div className="row-main">
                       <div className="row-title">{titleOf(t)}</div>
                       <div className="row-meta">
@@ -406,6 +572,17 @@ export function Transactions() {
           </button>
         )}
       </div>
+
+      {moveOpen && (
+        <MoveModal
+          ids={selected}
+          kind={selectionKind}
+          accounts={accounts.filter((a) => !a.archived)}
+          cards={cards.filter((c) => !c.archived)}
+          onClose={() => setMoveOpen(false)}
+          onDone={leaveSelection}
+        />
+      )}
 
       {editing && (
         <TransactionFormModal
