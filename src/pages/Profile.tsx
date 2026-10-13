@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, getErrorMessage } from "../services/api";
+import { api, getErrorMessage, TOKEN_KEY } from "../services/api";
 import { useApp } from "../contexts/AppContext";
 import type { ThemePreference } from "../contexts/AppContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -46,12 +46,17 @@ export function Profile() {
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
     setPasswordError(null);
-    if (newPassword.length < 6) return setPasswordError("A nova senha precisa ter pelo menos 6 caracteres.");
+    if (newPassword.length < 8) return setPasswordError("A nova senha precisa ter pelo menos 8 caracteres.");
     if (newPassword !== confirmPassword) return setPasswordError("As senhas não conferem.");
     setSavingPassword(true);
     try {
-      await api.put("/auth/password", { current_password: currentPassword, new_password: newPassword });
-      toast("Senha alterada");
+      const res = await api.put<{ token: string }>("/auth/password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      // A troca de senha desconecta os outros aparelhos; este segue com o token novo.
+      localStorage.setItem(TOKEN_KEY, res.data.token);
+      toast("Senha alterada. Os outros aparelhos foram desconectados.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
