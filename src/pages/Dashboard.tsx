@@ -566,7 +566,12 @@ function CategoryCard({ data }: { data?: DistributionItem[] }) {
 
 function BudgetsCard({ data }: { data?: Budget[] }) {
   const sorted = [...(data ?? [])].sort((a, b) => b.percentageUsed - a.percentageUsed).slice(0, 5);
-  const over = data?.filter((b) => b.percentageUsed > 100).length ?? 0;
+  const over = data?.filter((b) => b.pace === "estourou").length ?? 0;
+  const atRisk = data?.filter((b) => b.pace === "vai_estourar").length ?? 0;
+  const alerts = [
+    over > 0 && `${over} ${over === 1 ? "estourou" : "estouraram"}`,
+    atRisk > 0 && `${atRisk} no ritmo de estourar`,
+  ].filter(Boolean);
 
   return (
     <div className="card">
@@ -574,7 +579,7 @@ function BudgetsCard({ data }: { data?: Budget[] }) {
         <div>
           <h2 className="card-title">Orçamentos</h2>
           <p className="card-subtitle">
-            {over > 0 ? `${over} ${over === 1 ? "categoria estourou" : "categorias estouraram"} o limite` : "Limites de gasto por categoria"}
+            {alerts.length > 0 ? alerts.join(" · ") : "Limites de gasto por categoria"}
           </p>
         </div>
         <Link to="/metas" className="link-btn">Ver todos</Link>

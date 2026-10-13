@@ -158,6 +158,27 @@ export interface Budget {
   spent: number;
   remaining: number;
   percentageUsed: number;
+  /** Mês ("YYYY-MM") em que este limite passou a valer. */
+  since: string;
+  /** true quando o limite veio de um mês anterior (orçamento recorrente). */
+  inherited: boolean;
+  /** Média mensal de gasto da categoria nos 3 meses anteriores. */
+  average: number;
+  /** Onde o gasto termina o mês no ritmo atual (mês corrente). */
+  projection: number;
+  pace: "ok" | "atencao" | "vai_estourar" | "estourou";
+}
+
+/** daqui_pra_frente: vale até ser mudado; so_este_mes: o mês seguinte volta ao anterior. */
+export type BudgetScope = "daqui_pra_frente" | "so_este_mes";
+
+export interface BudgetSuggestion {
+  categoryId: number;
+  categoryName: string;
+  color: string;
+  average: number;
+  monthsWithSpending: number;
+  suggested: number;
 }
 
 export type BillStatus = "paga" | "fechada" | "aberta" | "futura";
