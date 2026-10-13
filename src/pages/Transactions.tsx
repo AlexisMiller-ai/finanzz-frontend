@@ -6,6 +6,7 @@ import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
 import type { Account, Card, Category, EditScope, PaymentMethod, Transaction, TransactionType } from "../types";
 import { formatDate, formatDayHeader, formatMonthLabel, todayISO } from "../utils/date";
+import { celulaNumero, celulaTexto } from "../utils/csv";
 import { formatMoney, formatSignedMoney } from "../utils/money";
 import { ChoiceDialog, Modal } from "../components/Modal";
 import { TransactionFormModal } from "../components/TransactionForm";
@@ -293,18 +294,16 @@ export function Transactions() {
   function exportCsv() {
     const header = ["Data", "Data da compra", "Descrição", "Categoria", "Tipo", "Forma de pagamento", "Parcela", "Valor"];
     const rows = filtered.map((t) => [
-      formatDate(t.date),
-      t.purchase_date ? formatDate(t.purchase_date) : "",
-      titleOf(t),
-      t.category_name ?? "",
-      t.type === "receita" ? "Receita" : "Despesa",
-      PAYMENT_LABEL[t.payment_method],
-      t.installment_total ? `${t.installment_number}/${t.installment_total}` : "",
-      ((t.type === "receita" ? 1 : -1) * Number(t.amount)).toFixed(2).replace(".", ","),
+      celulaTexto(formatDate(t.date)),
+      celulaTexto(t.purchase_date ? formatDate(t.purchase_date) : ""),
+      celulaTexto(titleOf(t)),
+      celulaTexto(t.category_name ?? ""),
+      celulaTexto(t.type === "receita" ? "Receita" : "Despesa"),
+      celulaTexto(PAYMENT_LABEL[t.payment_method]),
+      celulaTexto(t.installment_total ? `${t.installment_number}/${t.installment_total}` : ""),
+      celulaNumero((t.type === "receita" ? 1 : -1) * Number(t.amount)),
     ]);
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";"))
-      .join("\r\n");
+    const csv = [header.map(celulaTexto), ...rows].map((row) => row.join(";")).join("\r\n");
     const BOM = String.fromCharCode(0xfeff); // faz o Excel abrir com acentos corretos
     const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

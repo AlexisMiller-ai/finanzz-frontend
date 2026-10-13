@@ -12,6 +12,7 @@ import { useFetch } from "../hooks/useFetch";
 import { useThemeColors } from "../hooks/useThemeColors";
 import type { Report, ReportCategory } from "../types";
 import { formatDate, formatMonthShort, todayISO } from "../utils/date";
+import { celulaNumero, celulaTexto } from "../utils/csv";
 import { formatAxisValue, formatMoney, formatPercent } from "../utils/money";
 import { CategoryIcon, EmptyState, ProgressBar, Skeleton } from "../components/ui/Common";
 import { Segmented } from "../components/ui/Form";
@@ -62,7 +63,7 @@ export function Reports() {
   function exportarCsv() {
     if (!data) return;
     const linhas = [
-      ["Categoria", "Tipo", "Total", "% do tipo", "Média mensal", "Período anterior", "Variação %"],
+      ["Categoria", "Tipo", "Total", "% do tipo", "Média mensal", "Período anterior", "Variação %"].map(celulaTexto),
       ...data.despesasPorCategoria.map((c) => linhaCsv(c, "despesa")),
       ...data.receitasPorCategoria.map((c) => linhaCsv(c, "receita")),
     ];
@@ -166,13 +167,13 @@ export function Reports() {
 
 function linhaCsv(c: ReportCategory, tipo: string) {
   return [
-    `"${c.name}"`,
-    tipo,
-    c.total.toFixed(2).replace(".", ","),
-    c.percentual.toFixed(1).replace(".", ","),
-    c.mediaMensal.toFixed(2).replace(".", ","),
-    c.anterior.toFixed(2).replace(".", ","),
-    c.variacao === null ? "" : c.variacao.toFixed(1).replace(".", ","),
+    celulaTexto(c.name),
+    celulaTexto(tipo),
+    celulaNumero(c.total),
+    celulaNumero(c.percentual, 1),
+    celulaNumero(c.mediaMensal),
+    celulaNumero(c.anterior),
+    c.variacao === null ? "" : celulaNumero(c.variacao, 1),
   ];
 }
 

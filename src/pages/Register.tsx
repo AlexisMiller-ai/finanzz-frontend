@@ -17,7 +17,7 @@ export function Register() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (password.length < 6) return setError("A senha precisa ter pelo menos 6 caracteres.");
+    if (password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
     setLoading(true);
     try {
       await register(name, email, password);
@@ -57,8 +57,8 @@ export function Register() {
             required
           />
         </Field>
-        <Field label="Senha" htmlFor="password" hint="Mínimo de 6 caracteres">
-          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={6} />
+        <Field label="Senha" htmlFor="password" hint="Mínimo de 8 caracteres">
+          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={8} />
         </Field>
         <FormError message={error} />
         <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
