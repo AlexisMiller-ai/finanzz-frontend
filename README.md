@@ -52,3 +52,13 @@ src/
 - **Contas a pagar e a receber**: no formulário, o botão "Já paguei"/"Já recebi" (ligado por padrão, desligado quando a data é futura) define se o lançamento já entrou no saldo. O que está pendente ganha a etiqueta "a pagar", "a receber" ou "atrasado" na lista, tem um ✓ para dar baixa com um toque, e aparece no Dashboard em "A pagar e a receber" — vencidos primeiro, depois o que vence nos próximos 7 dias, junto com as faturas de cartão que fecharam sem baixa.
 - **Instalar no celular (PWA)**: em Perfil → "Instalar no celular". Fica com ícone na tela inicial e abre em tela cheia, sem a barra do navegador (no iPhone, a instalação é pelo menu Compartilhar do Safari). O service worker (`public/sw.js`) guarda o app — index, `/assets/*` e fontes — e as respostas GET da API ficam guardadas pelo próprio app (`src/services/offlineCache.ts`), então sem internet as telas de consulta abrem com os últimos números carregados, com uma faixa avisando. Criar, editar e excluir seguem exigindo internet. Sair da conta apaga essa cópia do aparelho.
 - Atalho: tecla **N** abre um novo lançamento.
+
+## Testes
+
+```bash
+npm test
+```
+
+Roda os testes dos leitores de extrato (`tests/importParsers.test.mjs`): valores no formato brasileiro e americano, sinais e sufixos D/C, datas, detecção de colunas do CSV e leitura de OFX de conta e de cartão. O Node lê o TypeScript direto, sem build.
+
+O GitHub Actions (`.github/workflows/ci.yml`) roda lint, checagem de tipos com build de produção e os testes em todo PR e em todo push na `main`.
