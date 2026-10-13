@@ -29,7 +29,7 @@ src/
   hooks/
     useFetch         GET com recarga automática quando algum dado é salvo (dataVersion)
     useThemeColors   Lê tokens CSS para os gráficos
-  pages/             Dashboard, Lançamentos, Contas e cartões, Orçamentos, Categorias, Importar, Perfil, Login, Cadastro
+  pages/             Dashboard, Lançamentos, Contas e cartões, Orçamentos, Relatórios, Categorias, Importar, Perfil, Login, Cadastro
   utils/             Datas, dinheiro, leitura de CSV/OFX, sugestão de categoria
   index.css          Design system (tokens claro/escuro, componentes, responsivo)
 ```
@@ -47,6 +47,7 @@ src/
 - **Mês selecionado** fica salvo na sessão e vale para todas as telas.
 - **Importação** (`/importar`): o CSV ou OFX é lido no próprio navegador (o arquivo não é enviado a lugar nenhum); só os lançamentos confirmados vão para a API. As colunas do CSV são descobertas sozinhas e a categoria é sugerida pelo histórico do usuário, com um dicionário de estabelecimentos como reserva.
 - **Conciliação**: quem lança na hora não recebe duplicado. Cada linha do arquivo procura um lançamento seu com valor parecido em uma janela de dias e aparece como "você lançou: ...", com três opções — conciliar (o padrão), ignorar ou importar mesmo assim. Conciliar marca o seu lançamento como conferido, então ele não reaparece em importações futuras.
+- **Relatórios** (`/relatorios`): período livre (3, 6, 12 meses, este ano ou datas escolhidas) com entradas, saídas, saldo e média mensal, cada um comparado com o período anterior de mesmo tamanho; evolução por semana (até ~3 meses) ou por mês; para onde foi e de onde veio por categoria, com fatia, média mensal e variação; os oito maiores gastos; e exportação do resumo por categoria em CSV.
 - **Contas a pagar e a receber**: no formulário, o botão "Já paguei"/"Já recebi" (ligado por padrão, desligado quando a data é futura) define se o lançamento já entrou no saldo. O que está pendente ganha a etiqueta "a pagar", "a receber" ou "atrasado" na lista, tem um ✓ para dar baixa com um toque, e aparece no Dashboard em "A pagar e a receber" — vencidos primeiro, depois o que vence nos próximos 7 dias, junto com as faturas de cartão que fecharam sem baixa.
 - **Instalar no celular (PWA)**: em Perfil → "Instalar no celular". Fica com ícone na tela inicial e abre em tela cheia, sem a barra do navegador (no iPhone, a instalação é pelo menu Compartilhar do Safari). O service worker (`public/sw.js`) guarda o app — index, `/assets/*` e fontes — e as respostas GET da API ficam guardadas pelo próprio app (`src/services/offlineCache.ts`), então sem internet as telas de consulta abrem com os últimos números carregados, com uma faixa avisando. Criar, editar e excluir seguem exigindo internet. Sair da conta apaga essa cópia do aparelho.
 - Atalho: tecla **N** abre um novo lançamento.

@@ -17,6 +17,7 @@ const Categories = lazy(() => import("./pages/Categories").then((m) => ({ defaul
 const Accounts = lazy(() => import("./pages/Accounts").then((m) => ({ default: m.Accounts })));
 const Import = lazy(() => import("./pages/Import").then((m) => ({ default: m.Import })));
 const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
+const Reports = lazy(() => import("./pages/Reports").then((m) => ({ default: m.Reports })));
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
                 <Route path="/metas" element={<Budgets />} />
                 <Route path="/categorias" element={<Categories />} />
                 <Route path="/contas" element={<Accounts />} />
+                <Route path="/relatorios" element={<Reports />} />
                 <Route path="/importar" element={<Import />} />
                 <Route path="/perfil" element={<Profile />} />
               </Route>
