@@ -525,6 +525,9 @@ function CategoryCard({ data }: { data?: DistributionItem[] }) {
           <h2 className="card-title">Gastos por categoria</h2>
           <p className="card-subtitle">{data ? `${formatMoney(total)} no mês` : " "}</p>
         </div>
+        <Link to="/relatorios" className="link-btn">
+          Ver período
+        </Link>
       </div>
       {!data ? (
         <div className="category-bars">

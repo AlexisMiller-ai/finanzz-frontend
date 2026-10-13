@@ -186,3 +186,53 @@ export interface BillsResponse {
   openBillMonth: string;
   bills: Bill[];
 }
+
+/** Uma categoria dentro do relatório de período. */
+export interface ReportCategory {
+  categoryId: number | null;
+  name: string;
+  color: string;
+  total: number;
+  quantidade: number;
+  /** Fatia dentro das despesas (ou das receitas) do período. */
+  percentual: number;
+  mediaMensal: number;
+  /** Mesmo valor no período anterior de igual tamanho. */
+  anterior: number;
+  /** Variação %; null quando não havia base anterior. */
+  variacao: number | null;
+}
+
+export interface Report {
+  periodo: {
+    de: string;
+    ate: string;
+    dias: number;
+    meses: number;
+    agrupamento: "month" | "week";
+  };
+  anteriorPeriodo: { de: string; ate: string };
+  resumo: {
+    entradas: number;
+    saidas: number;
+    saldo: number;
+    lancamentos: number;
+    mediaMensalEntradas: number;
+    mediaMensalSaidas: number;
+    pendentes: { quantidade: number; valor: number };
+  };
+  anterior: { entradas: number; saidas: number; saldo: number; lancamentos: number };
+  despesasPorCategoria: ReportCategory[];
+  receitasPorCategoria: ReportCategory[];
+  linhaDoTempo: { inicio: string; entradas: number; saidas: number; saldo: number }[];
+  maioresGastos: {
+    id: number;
+    descricao: string | null;
+    valor: number;
+    data: string;
+    settled: boolean;
+    categoria: string | null;
+    cor: string | null;
+    origem: string | null;
+  }[];
+}

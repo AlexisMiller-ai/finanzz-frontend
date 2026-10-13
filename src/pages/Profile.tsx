@@ -122,6 +122,9 @@ export function Profile() {
           </Field>
           <Field label="Atalhos">
             <div className="page-actions">
+              <Link className="btn btn-secondary btn-sm" to="/relatorios">
+                Relatórios
+              </Link>
               <Link className="btn btn-secondary btn-sm" to="/contas">
                 Contas e cartões
               </Link>

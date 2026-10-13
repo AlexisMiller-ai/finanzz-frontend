@@ -13,6 +13,7 @@ import {
   IconMoon,
   IconPlus,
   IconSun,
+  IconPercent,
   IconTag,
   IconTarget,
 } from "./ui/Icons";
@@ -22,6 +23,7 @@ const menuItems = [
   { label: "Lançamentos", short: "Lançamentos", path: "/transacoes", Icon: IconList },
   { label: "Contas e cartões", short: "Contas", path: "/contas", Icon: IconWallet },
   { label: "Orçamentos", short: "Orçamentos", path: "/metas", Icon: IconTarget },
+  { label: "Relatórios", short: "Relatórios", path: "/relatorios", Icon: IconPercent },
   { label: "Categorias", short: "Categorias", path: "/categorias", Icon: IconTag },
 ];
 
@@ -30,6 +32,7 @@ const pageTitles: Record<string, string> = {
   "/transacoes": "Lançamentos",
   "/contas": "Contas e cartões",
   "/metas": "Orçamentos",
+  "/relatorios": "Relatórios",
   "/categorias": "Categorias",
   "/importar": "Importar",
   "/perfil": "Perfil",
