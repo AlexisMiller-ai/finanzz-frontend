@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { getErrorMessage } from "../services/api";
-import { AuthLayout, PasswordInput } from "../components/AuthLayout";
+import { AuthLayout, IconInput, PasswordInput } from "../components/AuthLayout";
 import { Field, FormError } from "../components/ui/Form";
-import { IconInfo } from "../components/ui/Icons";
+import { IconArrowRight, IconInfo, IconMail } from "../components/ui/Icons";
 
 export function Login() {
   const { login } = useAuth();
@@ -29,9 +29,7 @@ export function Login() {
   }
 
   return (
-    <AuthLayout>
-      <h1>Entrar</h1>
-      <p className="page-subtitle">Acesse seu controle financeiro.</p>
+    <AuthLayout mode="entrar" title="Bem-vindo de volta." subtitle="Entre com o e-mail e a senha da sua conta Finanzz.">
 
       <form className="form-stack" onSubmit={handleSubmit}>
         {params.get("expirada") && (
@@ -41,10 +39,11 @@ export function Login() {
           </div>
         )}
         <Field label="E-mail" htmlFor="email">
-          <input
+          <IconInput
+            icon={<IconMail size={16} />}
             id="email"
-            className="input"
             type="email"
+            placeholder="voce@email.com"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -53,17 +52,14 @@ export function Login() {
           />
         </Field>
         <Field label="Senha" htmlFor="password">
-          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="current-password" />
+          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="current-password" placeholder="Sua senha" />
         </Field>
         <FormError message={error} />
-        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-          {loading ? <span className="spinner" /> : "Entrar"}
+        <button type="submit" className="btn btn-primary btn-lg btn-block auth-submit" disabled={loading}>
+          {loading ? <span className="spinner" /> : <>Entrar no Finanzz <IconArrowRight size={16} /></>}
         </button>
       </form>
 
-      <p className="auth-switch">
-        Não tem conta? <Link to="/cadastro" className="link-btn">Criar conta</Link>
-      </p>
     </AuthLayout>
   );
 }
