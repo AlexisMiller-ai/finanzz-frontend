@@ -2,7 +2,7 @@ import { Suspense, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useApp } from "../contexts/AppContext";
-import { getInitials } from "../utils/format";
+import { UserAvatar } from "./ui/Common";
 import { OfflineBar } from "./PwaManager";
 import { TransactionFormModal } from "./TransactionForm";
 import {
@@ -123,7 +123,7 @@ export function Layout() {
             <IconLogout size={16} /> Sair
           </button>
           <NavLink to="/perfil" className="sidebar-user">
-            <span className="avatar">{getInitials(userName)}</span>
+            <UserAvatar name={userName} avatar={user?.avatar} />
             <span style={{ minWidth: 0 }}>
               <span className="sidebar-user-label" style={{ display: "block" }}>
                 Conta
@@ -151,7 +151,7 @@ export function Layout() {
               {isDark ? <IconSun /> : <IconMoon />}
             </button>
             <Link to="/perfil" aria-label="Perfil">
-              <span className="avatar">{getInitials(userName)}</span>
+              <UserAvatar name={userName} avatar={user?.avatar} />
             </Link>
           </div>
         </header>

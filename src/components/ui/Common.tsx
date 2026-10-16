@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { getInitials } from "../../utils/format";
 import { useApp } from "../../contexts/AppContext";
 import { formatMonthLabel, getCurrentMonth, shiftMonth } from "../../utils/date";
 import { IconChevronLeft, IconChevronRight } from "./Icons";
@@ -126,5 +127,26 @@ export function Sparkline({ values, label }: { values: number[]; label: string }
       <polyline points={points} fill="none" vectorEffect="non-scaling-stroke" />
       <circle cx={last[0]} cy={last[1]} r="2.5" />
     </svg>
+  );
+}
+
+/** Foto de perfil, ou as iniciais quando não houver foto. */
+export function UserAvatar({
+  name,
+  avatar,
+  size = 32,
+}: {
+  name: string;
+  avatar?: string | null;
+  size?: number;
+}) {
+  return (
+    <span
+      className="avatar"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
+      aria-hidden="true"
+    >
+      {avatar ? <img src={avatar} alt="" /> : getInitials(name)}
+    </span>
   );
 }
