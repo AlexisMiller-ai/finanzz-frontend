@@ -58,7 +58,7 @@ export function MonthPlan() {
             <h2 className="card-title">Plano de {formatMonthLabel(month).toLowerCase()}</h2>
             <p className="card-subtitle">
               {meta > 0
-                ? "Quanto entra, quanto você guarda e quanto sobra para gastar"
+                ? "Quanto entrou, quanto você guarda e quanto ainda dá para gastar"
                 : "Defina quanto quer guardar para saber quanto pode gastar"}
             </p>
           </div>
@@ -81,9 +81,17 @@ export function MonthPlan() {
             </div>
           </div>
           <div>
-            <div className="plan-item-label">Posso gastar</div>
-            <div className="plan-item-value">{formatMoney(limite)}</div>
-            <div className="field-hint">entrou − meta</div>
+            <div className="plan-item-label">
+              {restante < 0 ? "Passou do planejado" : "Ainda posso gastar"}
+            </div>
+            <div className={`plan-item-value ${restante < 0 ? "text-out" : "text-in"}`}>
+              {formatMoney(Math.abs(restante))}
+            </div>
+            <div className="field-hint">
+              {meta > 0
+                ? `entrou − meta − ${formatMoney(gasto)} já gastos`
+                : `entrou − ${formatMoney(gasto)} já gastos`}
+            </div>
           </div>
         </div>
 
@@ -92,12 +100,8 @@ export function MonthPlan() {
             <ProgressBar percent={usado} tone={tone} />
             <div className="row-meta" style={{ justifyContent: "space-between", marginTop: 8 }}>
               <span>
-                <strong className={restante < 0 ? "text-out" : ""}>
-                  {formatMoney(Math.abs(restante))}
-                </strong>{" "}
-                {restante < 0 ? "acima do planejado" : "ainda disponível"}
-                {" · "}
-                {formatMoney(gasto)} gastos ({formatPercent(usado)})
+                <strong>{formatMoney(gasto)}</strong> gastos de {formatMoney(limite)} planejados (
+                {formatPercent(usado)})
               </span>
               {isCurrentMonth && porDia > 0 && (
                 <span>
