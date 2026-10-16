@@ -6,6 +6,7 @@ import { useFetch } from "../hooks/useFetch";
 import type { Account, AccountKind, Card } from "../types";
 import { formatDate, formatMonthLabel, todayISO } from "../utils/date";
 import { formatMoney, numberToCents } from "../utils/money";
+import { isReserve } from "../utils/accounts";
 import { ChoiceDialog, Modal } from "../components/Modal";
 import { BillsModal } from "../components/BillsModal";
 import { TransferFormModal } from "../components/TransferForm";
@@ -52,11 +53,16 @@ export function Accounts() {
   const [adjustingCard, setAdjustingCard] = useState<Card | null>(null);
   const [billsCard, setBillsCard] = useState<Card | null>(null);
 
-  const activeAccounts = (accounts.data ?? []).filter((a) => !a.archived);
+  // Contas para gastar primeiro, reserva por último.
+  const activeAccounts = (accounts.data ?? [])
+    .filter((a) => !a.archived)
+    .sort((a, b) => Number(isReserve(a)) - Number(isReserve(b)));
   const archivedAccounts = (accounts.data ?? []).filter((a) => a.archived);
   const activeCards = (cards.data ?? []).filter((c) => !c.archived);
 
-  const totalContas = activeAccounts.reduce((sum, a) => sum + a.balance, 0);
+  // Reserva (investimento) fica de fora do que dá para gastar.
+  const totalContas = activeAccounts.filter((a) => !isReserve(a)).reduce((sum, a) => sum + a.balance, 0);
+  const totalReserva = activeAccounts.filter(isReserve).reduce((sum, a) => sum + a.balance, 0);
   const totalFaturas = activeCards.reduce((sum, c) => sum + Math.max(c.outstanding, 0), 0);
   const vencimentos = activeCards
     .filter((c) => c.outstanding > 0 && c.openBillDueDate)
@@ -119,11 +125,13 @@ export function Accounts() {
             ) : (
               <div className="plan-grid">
                 <div>
-                  <div className="plan-item-label">Dinheiro nas contas</div>
+                  <div className="plan-item-label">Dinheiro disponível</div>
                   <div className={`plan-item-value ${totalContas < 0 ? "text-out" : ""}`}>
                     {formatMoney(totalContas)}
                   </div>
-                  <div className="field-hint">saldo de hoje</div>
+                  <div className="field-hint">
+                    {totalReserva > 0 ? `saldo de hoje · reserva à parte: ${formatMoney(totalReserva)}` : "saldo de hoje"}
+                  </div>
                 </div>
                 <div>
                   <div className="plan-item-label">Faturas a pagar</div>
@@ -187,8 +195,13 @@ export function Accounts() {
                           {account.isDefault && (
                             <span className="badge badge-primary" style={{ marginLeft: 6 }}>padrão</span>
                           )}
+                          {isReserve(account) && (
+                            <span className="badge" style={{ marginLeft: 6 }}>reserva</span>
+                          )}
                         </div>
-                        <div className="row-meta">{KIND_LABEL[account.kind]}</div>
+                        <div className="row-meta">
+                          {isReserve(account) ? "Investimento · fora do disponível" : KIND_LABEL[account.kind]}
+                        </div>
                       </div>
                       <div className={`row-amount ${account.balance < 0 ? "text-out" : ""}`}>
                         {formatMoney(account.balance)}
@@ -602,6 +615,12 @@ function AccountModal({
             ]}
           />
         </Field>
+        {kind === "investimento" && (
+          <div className="field-hint" style={{ marginTop: -6 }}>
+            Conta de investimento é tratada como reserva: aparece no app, mas não entra no dinheiro
+            disponível nem na sobra.
+          </div>
+        )}
         <Field
           label="Saldo inicial"
           htmlFor="acc-balance"

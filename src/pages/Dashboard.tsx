@@ -27,6 +27,7 @@ import {
   shiftMonth,
 } from "../utils/date";
 import { budgetTone } from "../utils/format";
+import { isReserve } from "../utils/accounts";
 import { formatAxisValue, formatMoney, formatPercent, formatSignedMoney, numberToCents } from "../utils/money";
 import { Modal } from "../components/Modal";
 import { TransactionFormModal } from "../components/TransactionForm";
@@ -102,7 +103,6 @@ export function Dashboard() {
               accounts={accounts.data}
               cards={cards.data}
               upcoming={upcoming.data}
-              month={month}
               onEdit={() => setSavingsOpen(true)}
             />
           </div>
@@ -300,14 +300,12 @@ function MoneyCard({
   accounts,
   cards,
   upcoming,
-  month,
   onEdit,
 }: {
   summary?: DashboardSummary;
   accounts?: Account[];
   cards?: Card[];
   upcoming?: EvolutionPoint[];
-  month: string;
   onEdit: () => void;
 }) {
   if (!s || !accounts) {
@@ -320,9 +318,13 @@ function MoneyCard({
     );
   }
 
-  const active = accounts.filter((a) => !a.archived);
-  const total = active.reduce((sum, a) => sum + a.balance, 0);
-  const activeCards = (cards ?? []).filter((c) => !c.archived && (c.billTotal > 0 || c.outstanding > 0));
+  const active = accounts
+    .filter((a) => !a.archived)
+    .sort((a, b) => Number(isReserve(a)) - Number(isReserve(b)));
+  // Reserva (investimento) não entra no que dá para gastar.
+  const total = active.filter((a) => !isReserve(a)).reduce((sum, a) => sum + a.balance, 0);
+  // Mesmo critério da tela de contas: a fatura que está aberta hoje.
+  const activeCards = (cards ?? []).filter((c) => !c.archived && (c.openBillTotal > 0 || c.outstanding > 0));
   const committed = (upcoming ?? []).filter((p) => p.saidas > 0).slice(0, 2);
 
   return (
@@ -330,7 +332,7 @@ function MoneyCard({
       <div className="card-header">
         <div>
           <div className="plan-item-label">
-            <IconWallet size={15} /> Saldo em contas
+            <IconWallet size={15} /> Dinheiro disponível
           </div>
           <div className="kpi-value" style={{ fontSize: 28, marginTop: 2 }}>
             {formatMoney(total)}
@@ -353,6 +355,7 @@ function MoneyCard({
               <span className="dot" style={{ background: account.color }} />
               <div className="row-main">
                 <div className="row-title">{account.name}</div>
+                {isReserve(account) && <div className="row-meta">reserva · fora do disponível</div>}
               </div>
               <div className={`row-amount ${account.balance < 0 ? "text-out" : ""}`}>
                 {formatMoney(account.balance)}
@@ -369,14 +372,15 @@ function MoneyCard({
             <div className="row-main">
               <div className="row-title">{card.name}</div>
               <div className="row-meta">
-                fatura de {formatMonthLabel(month).toLowerCase()}
-                {card.dueDay ? ` · vence dia ${card.dueDay}` : ""}
-                {card.futureInstallments > 0 && (
-                  <span>· {formatMoney(card.futureInstallments)} em parcelas futuras</span>
-                )}
+                fatura de {formatMonthLabel(card.openBillMonth).split(" ")[0]?.toLowerCase()}
+                {card.openBillPaid
+                  ? " · paga ✓"
+                  : card.openBillDueDate
+                    ? ` · vence ${formatDate(card.openBillDueDate)}`
+                    : ""}
               </div>
             </div>
-            <div className="row-amount">{formatMoney(card.billTotal)}</div>
+            <div className="row-amount">{formatMoney(card.openBillTotal)}</div>
           </div>
         ))}
 
