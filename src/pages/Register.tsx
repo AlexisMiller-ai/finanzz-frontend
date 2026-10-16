@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { getErrorMessage } from "../services/api";
-import { AuthLayout, PasswordInput } from "../components/AuthLayout";
+import { AuthLayout, IconInput, PasswordInput } from "../components/AuthLayout";
+import { IconArrowRight, IconMail, IconUser } from "../components/ui/Icons";
 import { Field, FormError } from "../components/ui/Form";
 
 export function Register() {
@@ -29,15 +30,14 @@ export function Register() {
   }
 
   return (
-    <AuthLayout>
-      <h1>Criar conta</h1>
-      <p className="page-subtitle">Comece a controlar suas finanças em poucos minutos.</p>
+    <AuthLayout mode="cadastro" title="Crie sua conta." subtitle="Leva menos de um minuto. Depois é só cadastrar suas contas e o salário.">
 
       <form className="form-stack" onSubmit={handleSubmit}>
         <Field label="Nome" htmlFor="name">
-          <input
+          <IconInput
+            icon={<IconUser size={16} />}
             id="name"
-            className="input"
+            placeholder="Seu nome"
             autoComplete="name"
             value={name}
             maxLength={100}
@@ -47,10 +47,11 @@ export function Register() {
           />
         </Field>
         <Field label="E-mail" htmlFor="email">
-          <input
+          <IconInput
+            icon={<IconMail size={16} />}
             id="email"
-            className="input"
             type="email"
+            placeholder="voce@email.com"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -58,17 +59,14 @@ export function Register() {
           />
         </Field>
         <Field label="Senha" htmlFor="password" hint="Mínimo de 8 caracteres">
-          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={8} />
+          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={8} placeholder="Crie uma senha" />
         </Field>
         <FormError message={error} />
-        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-          {loading ? <span className="spinner" /> : "Criar conta"}
+        <button type="submit" className="btn btn-primary btn-lg btn-block auth-submit" disabled={loading}>
+          {loading ? <span className="spinner" /> : <>Criar minha conta <IconArrowRight size={16} /></>}
         </button>
       </form>
 
-      <p className="auth-switch">
-        Já tem conta? <Link to="/login" className="link-btn">Entrar</Link>
-      </p>
     </AuthLayout>
   );
 }
