@@ -65,6 +65,9 @@ export function Budgets() {
     <div className="page">
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Planejamento</span>
+          </div>
           <h1 className="page-title">Plano do mês</h1>
           <p className="page-subtitle">
             Quanto você pode gastar e quanto quer guardar em {formatMonthLabel(month).toLowerCase()}

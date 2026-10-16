@@ -321,6 +321,9 @@ export function Import() {
     <div className="page" style={{ maxWidth: 900 }}>
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Ferramentas</span>
+          </div>
           <h1 className="page-title">Importar lançamentos</h1>
           <p className="page-subtitle">
             Traga o extrato da conta ou a fatura do cartão em CSV ou OFX, em vez de digitar tudo.

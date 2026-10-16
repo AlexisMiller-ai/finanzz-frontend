@@ -46,7 +46,7 @@ function Brand() {
         <span className="brand-name" style={{ display: "block" }}>
           Finanzz
         </span>
-        <span className="brand-tag hide-mobile">GESTÃO PESSOAL</span>
+        <span className="brand-tag hide-mobile">gestão pessoal</span>
       </span>
     </Link>
   );
@@ -108,7 +108,7 @@ export function Layout() {
         <nav className="nav">
           {menuItems.map(({ label, path, Icon }) => (
             <NavLink key={path} to={path} end={path === "/"} className="nav-link">
-              <Icon />
+              <Icon size={16} />
               {label}
             </NavLink>
           ))}
@@ -116,15 +116,18 @@ export function Layout() {
 
         <div className="sidebar-footer">
           <button className="btn btn-ghost" onClick={() => setTheme(isDark ? "light" : "dark")}>
-            {isDark ? <IconSun /> : <IconMoon />}
+            {isDark ? <IconSun size={16} /> : <IconMoon size={16} />}
             {isDark ? "Tema claro" : "Tema escuro"}
           </button>
           <button className="btn btn-ghost" onClick={handleLogout}>
-            <IconLogout /> Sair
+            <IconLogout size={16} /> Sair
           </button>
-          <NavLink to="/perfil" className="sidebar-user" style={{ marginTop: 6 }}>
+          <NavLink to="/perfil" className="sidebar-user">
             <span className="avatar">{getInitials(userName)}</span>
             <span style={{ minWidth: 0 }}>
+              <span className="sidebar-user-label" style={{ display: "block" }}>
+                Conta
+              </span>
               <span className="sidebar-user-name" style={{ display: "block" }}>
                 {userName}
               </span>

@@ -75,6 +75,9 @@ export function Profile() {
             {getInitials(user?.name ?? "")}
           </span>
           <div>
+            <div className="eyebrow-row">
+              <span className="eyebrow">Sua conta</span>
+            </div>
             <h1 className="page-title">{user?.name}</h1>
             <p className="page-subtitle" style={{ marginTop: 2 }}>{user?.email}</p>
           </div>

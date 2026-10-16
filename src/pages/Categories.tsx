@@ -24,6 +24,9 @@ export function Categories() {
     <div className="page">
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Cadastros</span>
+          </div>
           <h1 className="page-title">Categorias</h1>
           <p className="page-subtitle">Organize seus lançamentos. Toque em uma categoria para editar.</p>
         </div>
