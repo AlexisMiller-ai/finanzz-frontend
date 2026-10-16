@@ -80,6 +80,9 @@ export function Reports() {
     <div className="page">
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Análise</span>
+          </div>
           <h1 className="page-title">Relatórios</h1>
           <p className="page-subtitle">
             Para onde o dinheiro foi em um período maior que o mês

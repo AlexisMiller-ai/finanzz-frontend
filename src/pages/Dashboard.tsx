@@ -31,7 +31,7 @@ import { isReserve } from "../utils/accounts";
 import { formatAxisValue, formatMoney, formatPercent, formatSignedMoney, numberToCents } from "../utils/money";
 import { Modal } from "../components/Modal";
 import { TransactionFormModal } from "../components/TransactionForm";
-import { CategoryIcon, EmptyState, MonthSwitcher, ProgressBar, Skeleton } from "../components/ui/Common";
+import { CategoryIcon, EmptyState, MonthSwitcher, ProgressBar, Skeleton, Sparkline } from "../components/ui/Common";
 import { Field, FormError, MoneyInput } from "../components/ui/Form";
 import {
   IconAlert,
@@ -69,6 +69,9 @@ export function Dashboard() {
     <div className="page">
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Visão geral</span>
+          </div>
           <h1 className="page-title">
             {getGreeting()}, {firstName}
           </h1>
@@ -92,7 +95,7 @@ export function Dashboard() {
         </div>
       ) : (
         <>
-          <KpiRow summary={s} />
+          <KpiRow summary={s} evolution={evolution.data} />
 
           <UpcomingCard />
 
@@ -145,7 +148,7 @@ function Delta({ current, previous, higherIsGood }: { current: number; previous:
   );
 }
 
-function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
+function KpiRow({ summary: s, evolution }: { summary?: DashboardSummary; evolution?: EvolutionPoint[] }) {
   if (!s) {
     return (
       <div className="grid grid-kpi">
@@ -160,6 +163,10 @@ function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
     );
   }
 
+  // Últimos meses, para a linha de tendência de cada indicador.
+  const serie = evolution ?? [];
+  const taxa = serie.map((p) => (p.entradas > 0 ? ((p.entradas - p.saidas) / p.entradas) * 100 : 0));
+
   return (
     <div className="grid grid-kpi">
       <div className="card kpi">
@@ -171,6 +178,7 @@ function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
         <div className="kpi-foot">
           {s.quantidadeLancamentos} {s.quantidadeLancamentos === 1 ? "lançamento" : "lançamentos"}
         </div>
+        <Sparkline values={serie.map((p) => p.saldo)} label="Saldo nos últimos meses" />
       </div>
       <div className="card kpi">
         <div className="kpi-top">
@@ -181,6 +189,7 @@ function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
         <div className="kpi-foot">
           <Delta current={s.entradasPeriodo} previous={s.mesAnterior.entradas} higherIsGood />
         </div>
+        <Sparkline values={serie.map((p) => p.entradas)} label="Entradas nos últimos meses" />
       </div>
       <div className="card kpi">
         <div className="kpi-top">
@@ -191,6 +200,7 @@ function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
         <div className="kpi-foot">
           <Delta current={s.saidasPeriodo} previous={s.mesAnterior.saidas} higherIsGood={false} />
         </div>
+        <Sparkline values={serie.map((p) => p.saidas)} label="Saídas nos últimos meses" />
       </div>
       <div className="card kpi">
         <div className="kpi-top">
@@ -207,6 +217,7 @@ function KpiRow({ summary: s }: { summary?: DashboardSummary }) {
               ? "da renda guardada"
               : "gastou mais do que ganhou"}
         </div>
+        <Sparkline values={taxa} label="Taxa de economia nos últimos meses" />
       </div>
     </div>
   );

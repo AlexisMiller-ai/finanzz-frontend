@@ -94,3 +94,37 @@ export function CategoryIcon({ name, color }: { name?: string | null; color?: st
     </span>
   );
 }
+
+/**
+ * Linha de tendência compacta (sem eixos) para cartões de indicador.
+ * Mostra só a forma da série; o valor exato fica no número acima dela.
+ */
+export function Sparkline({ values, label }: { values: number[]; label: string }) {
+  if (values.length < 2) return null;
+  const width = 120;
+  const height = 28;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - 3 - ((v - min) / range) * (height - 6);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const last = points.split(" ").pop()!.split(",");
+
+  return (
+    <svg
+      className="sparkline"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={label}
+    >
+      <polyline points={points} fill="none" vectorEffect="non-scaling-stroke" />
+      <circle cx={last[0]} cy={last[1]} r="2.5" />
+    </svg>
+  );
+}

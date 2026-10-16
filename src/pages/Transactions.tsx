@@ -336,6 +336,9 @@ export function Transactions() {
     <div className="page">
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Movimentações</span>
+          </div>
           <h1 className="page-title">Lançamentos</h1>
           <p className="page-subtitle">Tudo que entrou e saiu em {formatMonthLabel(month).toLowerCase()}</p>
         </div>

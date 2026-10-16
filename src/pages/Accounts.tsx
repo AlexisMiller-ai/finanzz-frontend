@@ -93,6 +93,9 @@ export function Accounts() {
     <div className="page">
       <div className="page-header">
         <div>
+          <div className="eyebrow-row">
+            <span className="eyebrow">Patrimônio</span>
+          </div>
           <h1 className="page-title">Contas e cartões</h1>
           <p className="page-subtitle">Quanto você tem hoje e quanto deve no cartão</p>
         </div>
