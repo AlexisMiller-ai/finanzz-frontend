@@ -33,7 +33,7 @@ function applyTheme(theme: ThemePreference) {
     theme === "light" ||
     (theme === "system" && window.matchMedia("(prefers-color-scheme: light)").matches);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", claro ? "#ffffff" : "#111018");
+  if (meta) meta.setAttribute("content", claro ? "#ffffff" : "#0a0f18");
 }
 
 interface AppContextType {

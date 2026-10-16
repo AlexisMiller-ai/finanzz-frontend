@@ -12,7 +12,7 @@
  * excluir exigem internet.
  */
 
-const VERSAO = "v1";
+const VERSAO = "v2";
 const SHELL = `finanzz-shell-${VERSAO}`;
 const ESTATICOS = `finanzz-estaticos-${VERSAO}`;
 const MEUS_CACHES = [SHELL, ESTATICOS];

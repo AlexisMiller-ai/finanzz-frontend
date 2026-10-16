@@ -6,6 +6,8 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  /** Foto de perfil (data URL de imagem), quando houver. */
+  avatar?: string | null;
 }
 
 export interface Category {

@@ -6,9 +6,10 @@ import type { ThemePreference } from "../contexts/AppContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import type { User } from "../types";
-import { getInitials } from "../utils/format";
+import { prepararFotoPerfil } from "../utils/image";
+import { UserAvatar } from "../components/ui/Common";
 import { Field, FormError, Segmented } from "../components/ui/Form";
-import { IconDownload, IconLogout } from "../components/ui/Icons";
+import { IconCamera, IconDownload, IconLogout } from "../components/ui/Icons";
 import { ehIOS, estaInstalado, instalarApp, useInstalavel } from "../utils/pwa";
 
 export function Profile() {
@@ -21,11 +22,43 @@ export function Profile() {
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
 
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  async function trocarFoto(arquivo: File) {
+    setPhotoError(null);
+    setSavingPhoto(true);
+    try {
+      const image = await prepararFotoPerfil(arquivo);
+      const res = await api.put<User>("/auth/avatar", { image });
+      updateUser(res.data);
+      toast("Foto atualizada");
+    } catch (err) {
+      setPhotoError(err instanceof Error && !("isAxiosError" in err) ? err.message : getErrorMessage(err));
+    } finally {
+      setSavingPhoto(false);
+    }
+  }
+
+  async function removerFoto() {
+    setPhotoError(null);
+    setSavingPhoto(true);
+    try {
+      const res = await api.delete<User>("/auth/avatar");
+      updateUser(res.data);
+      toast("Foto removida");
+    } catch (err) {
+      setPhotoError(getErrorMessage(err));
+    } finally {
+      setSavingPhoto(false);
+    }
+  }
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -71,15 +104,51 @@ export function Profile() {
     <div className="page" style={{ maxWidth: 720 }}>
       <div className="page-header">
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span className="avatar" style={{ width: 52, height: 52, fontSize: 18 }}>
-            {getInitials(user?.name ?? "")}
-          </span>
+          <label className="avatar-upload" title="Trocar foto">
+            <UserAvatar name={user?.name ?? ""} avatar={user?.avatar} size={64} />
+            <span className="avatar-upload-badge" aria-hidden="true">
+              <IconCamera size={13} />
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Trocar foto de perfil"
+              disabled={savingPhoto}
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                if (arquivo) trocarFoto(arquivo);
+                e.target.value = "";
+              }}
+            />
+          </label>
           <div>
             <div className="eyebrow-row">
               <span className="eyebrow">Sua conta</span>
             </div>
             <h1 className="page-title">{user?.name}</h1>
             <p className="page-subtitle" style={{ marginTop: 2 }}>{user?.email}</p>
+            <div className="page-actions" style={{ marginTop: 8 }}>
+              <label className="btn btn-secondary btn-sm" style={{ position: "relative" }}>
+                {savingPhoto ? <span className="spinner" /> : user?.avatar ? "Trocar foto" : "Adicionar foto"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={savingPhoto}
+                  onChange={(e) => {
+                    const arquivo = e.target.files?.[0];
+                    if (arquivo) trocarFoto(arquivo);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {user?.avatar && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={removerFoto} disabled={savingPhoto}>
+                  Remover
+                </button>
+              )}
+            </div>
+            <FormError message={photoError} />
           </div>
         </div>
       </div>
