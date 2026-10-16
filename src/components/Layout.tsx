@@ -22,7 +22,7 @@ const menuItems = [
   { label: "Dashboard", short: "Início", path: "/", Icon: IconDashboard },
   { label: "Lançamentos", short: "Lançamentos", path: "/transacoes", Icon: IconList },
   { label: "Contas e cartões", short: "Contas", path: "/contas", Icon: IconWallet },
-  { label: "Orçamentos", short: "Orçamentos", path: "/metas", Icon: IconTarget },
+  { label: "Plano do mês", short: "Plano", path: "/metas", Icon: IconTarget },
   { label: "Relatórios", short: "Relatórios", path: "/relatorios", Icon: IconPercent },
   { label: "Categorias", short: "Categorias", path: "/categorias", Icon: IconTag },
 ];
@@ -31,7 +31,7 @@ const pageTitles: Record<string, string> = {
   "/": "Dashboard",
   "/transacoes": "Lançamentos",
   "/contas": "Contas e cartões",
-  "/metas": "Orçamentos",
+  "/metas": "Plano do mês",
   "/relatorios": "Relatórios",
   "/categorias": "Categorias",
   "/importar": "Importar",
