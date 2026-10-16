@@ -7,6 +7,7 @@ import type { Budget, BudgetScope, BudgetSuggestion, Category, DistributionItem 
 import { formatMonthLabel, formatMonthShort, getCurrentMonth } from "../utils/date";
 import { formatMoney, formatPercent, numberToCents } from "../utils/money";
 import { ChoiceDialog, Modal } from "../components/Modal";
+import { MonthPlan } from "../components/MonthPlan";
 import { EmptyState, MonthSwitcher, ProgressBar, Skeleton } from "../components/ui/Common";
 import { Field, FormError, MoneyInput, Segmented } from "../components/ui/Form";
 import { IconAlert, IconCheck, IconEdit, IconPlus, IconTarget, IconTrash } from "../components/ui/Icons";
@@ -40,6 +41,9 @@ export function Budgets() {
   const { data: categories = [] } = useFetch<Category[]>("/categories");
 
   const [draft, setDraft] = useState<BudgetDraft | null>(null);
+  // Limites por categoria são detalhe opcional: abrem sozinhos quando já
+  // existem, mas o usuário pode recolher.
+  const [showCategories, setShowCategories] = useState<boolean | null>(null);
   const [stopping, setStopping] = useState<Budget | null>(null);
 
   const list = budgets.data ?? [];
@@ -53,6 +57,7 @@ export function Budgets() {
   const totalSpent = list.reduce((acc, b) => acc + b.spent, 0);
   const outsideSpent = unbudgeted.reduce((acc, d) => acc + d.total, 0);
   const suggestionList = suggestions.data ?? [];
+  const categoriesOpen = showCategories ?? list.length > 0;
 
   const newBudget = () => setDraft({ categoryId: null, limit: 0 });
 
@@ -60,19 +65,17 @@ export function Budgets() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Orçamentos</h1>
+          <h1 className="page-title">Plano do mês</h1>
           <p className="page-subtitle">
-            Limites por categoria em {formatMonthLabel(month).toLowerCase()} — valem para os meses
-            seguintes até você mudar
+            Quanto você pode gastar e quanto quer guardar em {formatMonthLabel(month).toLowerCase()}
           </p>
         </div>
         <div className="page-actions">
           <MonthSwitcher />
-          <button className="btn btn-primary" onClick={newBudget}>
-            <IconPlus size={16} /> Novo orçamento
-          </button>
         </div>
       </div>
+
+      <MonthPlan />
 
       {budgets.error && !budgets.data ? (
         <div className="card">
@@ -89,6 +92,32 @@ export function Budgets() {
         </div>
       ) : (
         <>
+          <div className="page-header" style={{ marginTop: 8, marginBottom: 0 }}>
+            <div>
+              <h2 className="card-title">Limites por categoria</h2>
+              <p className="card-subtitle">
+                Opcional: para apertar uma categoria específica dentro do plano
+                {list.length > 0 && ` · ${list.length} ${list.length === 1 ? "ativo" : "ativos"}`}
+              </p>
+            </div>
+            <div className="page-actions">
+              {categoriesOpen && (
+                <button className="btn btn-primary btn-sm" onClick={newBudget}>
+                  <IconPlus size={14} /> Novo limite
+                </button>
+              )}
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowCategories(!categoriesOpen)}
+                aria-expanded={categoriesOpen}
+              >
+                {categoriesOpen ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
+          </div>
+
+          {categoriesOpen && (
+          <>
           {list.length > 0 && (
             <div className="stat-strip">
               <div>
@@ -128,8 +157,8 @@ export function Budgets() {
             <div className="card">
               <EmptyState
                 icon={<IconTarget />}
-                title="Nenhum orçamento valendo neste mês"
-                description="Defina quanto quer gastar em cada categoria. O limite continua valendo nos próximos meses, sem precisar refazer."
+                title="Nenhum limite por categoria"
+                description="O plano do mês acima já controla o total. Use limites por categoria só se quiser apertar uma delas — ex.: no máximo R$ 400 em Alimentação."
                 action={
                   <button className="btn btn-primary" onClick={newBudget}>
                     <IconPlus size={16} /> Criar orçamento
@@ -202,6 +231,8 @@ export function Budgets() {
                 )}
               </div>
             </div>
+          )}
+          </>
           )}
         </>
       )}
