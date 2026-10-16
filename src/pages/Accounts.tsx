@@ -4,24 +4,32 @@ import { useApp } from "../contexts/AppContext";
 import { useToast } from "../contexts/ToastContext";
 import { useFetch } from "../hooks/useFetch";
 import type { Account, AccountKind, Card } from "../types";
-import { formatDate, formatMonthLabel, formatMonthShort } from "../utils/date";
+import { formatDate, formatMonthLabel, todayISO } from "../utils/date";
 import { formatMoney, numberToCents } from "../utils/money";
 import { ChoiceDialog, Modal } from "../components/Modal";
 import { BillsModal } from "../components/BillsModal";
 import { TransferFormModal } from "../components/TransferForm";
-import { CategoryIcon, EmptyState, MonthSwitcher, ProgressBar, Skeleton } from "../components/ui/Common";
+import { CategoryIcon, EmptyState, ProgressBar, Skeleton } from "../components/ui/Common";
 import { Field, FormError, MoneyInput, Segmented, SwitchRow } from "../components/ui/Form";
 import {
   IconAlert,
-  IconCalendar,
   IconCard,
-  IconEdit,
   IconPlus,
   IconRepeat,
-  IconTarget,
-  IconTrash,
   IconWallet,
 } from "../components/ui/Icons";
+
+interface UpcomingItem {
+  tipo: "lancamento" | "fatura";
+  valor: number;
+  movimento: "despesa" | "receita";
+  vencimento: string;
+}
+
+interface UpcomingResponse {
+  vencidos: UpcomingItem[];
+  proximos: UpcomingItem[];
+}
 
 const KIND_LABEL: Record<AccountKind, string> = {
   corrente: "Conta corrente",
@@ -31,9 +39,10 @@ const KIND_LABEL: Record<AccountKind, string> = {
 };
 
 export function Accounts() {
-  const { month } = useApp();
+  // A tela mostra sempre o retrato de hoje: saldo das contas agora e a fatura
+  // que está aberta em cada cartão. O histórico de faturas fica em "Faturas".
   const accounts = useFetch<Account[]>("/accounts");
-  const cards = useFetch<Card[]>(`/cards?month=${month}`);
+  const cards = useFetch<Card[]>("/cards");
 
   const [editingAccount, setEditingAccount] = useState<Account | "new" | null>(null);
   const [editingCard, setEditingCard] = useState<Card | "new" | null>(null);
@@ -45,18 +54,43 @@ export function Accounts() {
 
   const activeAccounts = (accounts.data ?? []).filter((a) => !a.archived);
   const archivedAccounts = (accounts.data ?? []).filter((a) => a.archived);
-  const total = activeAccounts.reduce((sum, a) => sum + a.balance, 0);
   const activeCards = (cards.data ?? []).filter((c) => !c.archived);
+
+  const totalContas = activeAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalFaturas = activeCards.reduce((sum, c) => sum + Math.max(c.outstanding, 0), 0);
+  const vencimentos = activeCards
+    .filter((c) => c.outstanding > 0 && c.openBillDueDate)
+    .map((c) => c.openBillDueDate as string)
+    .sort();
+  const proximoVencimento = vencimentos[0];
+  const ultimoVencimento = vencimentos[vencimentos.length - 1];
+
+  // Comparar o saldo de hoje com faturas que vencem depois do salário assusta
+  // à toa: a previsão soma o que entra e tira o que sai até a última fatura vencer.
+  const hoje = todayISO();
+  const diasAteVencer = ultimoVencimento
+    ? Math.min(Math.max(Math.round((Date.parse(ultimoVencimento) - Date.parse(hoje)) / 86_400_000), 0), 90)
+    : null;
+  const upcoming = useFetch<UpcomingResponse>(
+    diasAteVencer === null ? null : `/transactions/upcoming?days=${diasAteVencer}`,
+  );
+  const pendentesAteVencer = [...(upcoming.data?.vencidos ?? []), ...(upcoming.data?.proximos ?? [])].filter(
+    // Faturas fechadas sem baixa já estão em "faturas a pagar".
+    (item) => item.tipo === "lancamento" && (!ultimoVencimento || item.vencimento <= ultimoVencimento),
+  );
+  const aReceber = pendentesAteVencer.filter((i) => i.movimento === "receita").reduce((t, i) => t + i.valor, 0);
+  const aPagar = pendentesAteVencer.filter((i) => i.movimento === "despesa").reduce((t, i) => t + i.valor, 0);
+  const sobra = totalContas + aReceber - aPagar - totalFaturas;
+  const carregando = !accounts.data || !cards.data || (diasAteVencer !== null && !upcoming.data);
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Contas e cartões</h1>
-          <p className="page-subtitle">Onde seu dinheiro está e quanto você deve no cartão</p>
+          <p className="page-subtitle">Quanto você tem hoje e quanto deve no cartão</p>
         </div>
         <div className="page-actions">
-          <MonthSwitcher />
           <button className="btn btn-secondary" onClick={() => setTransferOpen(true)}>
             <IconRepeat size={16} /> Transferir
           </button>
@@ -78,25 +112,55 @@ export function Accounts() {
         </div>
       ) : (
         <>
+          {/* Resumo: uma resposta, não um número solto */}
           <div className="card">
-            <div className="plan-item-label">Saldo total em contas</div>
-            <div className="kpi-value" style={{ fontSize: 30 }}>
-              {accounts.data ? formatMoney(total) : <Skeleton width={180} height={30} />}
-            </div>
-            <div className="field-hint">
-              Soma das contas ativas, considerando lançamentos até hoje. Se não bater com o app do
-              banco, use o botão de ajustar saldo na conta.
-            </div>
+            {carregando ? (
+              <Skeleton height={64} />
+            ) : (
+              <div className="plan-grid">
+                <div>
+                  <div className="plan-item-label">Dinheiro nas contas</div>
+                  <div className={`plan-item-value ${totalContas < 0 ? "text-out" : ""}`}>
+                    {formatMoney(totalContas)}
+                  </div>
+                  <div className="field-hint">saldo de hoje</div>
+                </div>
+                <div>
+                  <div className="plan-item-label">Faturas a pagar</div>
+                  <div className="plan-item-value">{formatMoney(totalFaturas)}</div>
+                  <div className="field-hint">
+                    {proximoVencimento ? `próxima vence ${formatDate(proximoVencimento)}` : "nada em aberto"}
+                  </div>
+                </div>
+                <div>
+                  <div className="plan-item-label">
+                    {ultimoVencimento ? `Sobra até ${formatDate(ultimoVencimento).slice(0, 5)}` : "Sobra depois das faturas"}
+                  </div>
+                  <div className={`plan-item-value ${sobra < 0 ? "text-out" : "text-in"}`}>
+                    {formatMoney(sobra)}
+                  </div>
+                  <div className="field-hint">
+                    {aReceber > 0 || aPagar > 0
+                      ? [
+                          aReceber > 0 && `+ ${formatMoney(aReceber)} a receber`,
+                          aPagar > 0 && `− ${formatMoney(aPagar)} a pagar`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : sobra < 0
+                        ? "o dinheiro de hoje não cobre as faturas"
+                        : "contas − faturas"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-halves" style={{ alignItems: "start" }}>
             {/* Contas */}
             <div className="card card-flush">
               <div className="card-header">
-                <div>
-                  <h2 className="card-title">Contas</h2>
-                  <p className="card-subtitle">{activeAccounts.length} ativas</p>
-                </div>
+                <h2 className="card-title">Contas</h2>
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditingAccount("new")}>
                   <IconPlus size={14} /> Nova conta
                 </button>
@@ -111,54 +175,50 @@ export function Accounts() {
               ) : (
                 <div className="list" style={{ paddingBottom: 6 }}>
                   {activeAccounts.map((account) => (
-                    <div key={account.id} className="list-row clickable" onClick={() => setEditingAccount(account)}>
+                    <div
+                      key={account.id}
+                      className="list-row clickable"
+                      onClick={() => setEditingAccount(account)}
+                    >
                       <CategoryIcon name={account.name} color={account.color} />
                       <div className="row-main">
-                        <div className="row-title">{account.name}</div>
-                        <div className="row-meta">
-                          {KIND_LABEL[account.kind]} · {account.transactionCount}{" "}
-                          {account.transactionCount === 1 ? "lançamento" : "lançamentos"}
-                          {account.isDefault && <span className="badge badge-primary">padrão</span>}
+                        <div className="row-title">
+                          {account.name}
+                          {account.isDefault && (
+                            <span className="badge badge-primary" style={{ marginLeft: 6 }}>padrão</span>
+                          )}
                         </div>
+                        <div className="row-meta">{KIND_LABEL[account.kind]}</div>
                       </div>
                       <div className={`row-amount ${account.balance < 0 ? "text-out" : ""}`}>
                         {formatMoney(account.balance)}
                       </div>
-                      <div className="row-actions" style={{ display: "flex" }} onClick={(e) => e.stopPropagation()}>
-                        <button
-                          className="btn btn-icon"
-                          onClick={() => setAdjusting(account)}
-                          aria-label={`Ajustar saldo de ${account.name}`}
-                          title="Ajustar saldo"
-                        >
-                          <IconTarget size={16} />
-                        </button>
-                        <button className="btn btn-icon" onClick={() => setEditingAccount(account)} aria-label={`Editar ${account.name}`}>
-                          <IconEdit size={16} />
-                        </button>
-                        <button
-                          className="btn btn-icon danger"
-                          onClick={() => setDeleting({ kind: "account", item: account })}
-                          aria-label={`Excluir ${account.name}`}
-                        >
-                          <IconTrash size={16} />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAdjusting(account);
+                        }}
+                        title="Informar o saldo que aparece no app do banco"
+                      >
+                        Ajustar
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
 
               {archivedAccounts.length > 0 && (
-                <div style={{ padding: "10px 20px 16px" }}>
-                  <div className="section-title" style={{ marginBottom: 8 }}>Arquivadas</div>
-                  {archivedAccounts.map((account) => (
-                    <div key={account.id} className="row-meta" style={{ justifyContent: "space-between" }}>
+                <div className="field-hint" style={{ padding: "4px 20px 16px" }}>
+                  Arquivadas:{" "}
+                  {archivedAccounts.map((account, i) => (
+                    <span key={account.id}>
+                      {i > 0 && ", "}
                       <button className="link-btn" onClick={() => setEditingAccount(account)}>
                         {account.name}
                       </button>
-                      <span>{formatMoney(account.balance)}</span>
-                    </div>
+                    </span>
                   ))}
                 </div>
               )}
@@ -167,10 +227,7 @@ export function Accounts() {
             {/* Cartões */}
             <div className="card card-flush">
               <div className="card-header">
-                <div>
-                  <h2 className="card-title">Cartões de crédito</h2>
-                  <p className="card-subtitle">Fatura de {formatMonthLabel(month).toLowerCase()}</p>
-                </div>
+                <h2 className="card-title">Cartões de crédito</h2>
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditingCard("new")}>
                   <IconPlus size={14} /> Novo cartão
                 </button>
@@ -189,72 +246,12 @@ export function Accounts() {
               ) : (
                 <div className="list" style={{ paddingBottom: 6 }}>
                   {activeCards.map((card) => (
-                    <div key={card.id} className="list-row clickable" style={{ alignItems: "flex-start" }} onClick={() => setEditingCard(card)}>
-                      <CategoryIcon name={card.name} color={card.color} />
-                      <div className="row-main">
-                        <div className="category-bar-top">
-                          <span className="row-title">
-                            {card.name}
-                            {card.isDefault && (
-                              <span className="badge badge-primary" style={{ marginLeft: 6 }}>padrão</span>
-                            )}
-                          </span>
-                          <span className="nowrap tabular">
-                            <strong>{formatMoney(card.billTotal)}</strong>
-                          </span>
-                        </div>
-                        {card.limitAmount ? (
-                          <>
-                            <ProgressBar
-                              percent={(card.outstanding / card.limitAmount) * 100}
-                              tone={card.outstanding / card.limitAmount > 0.9 ? "bad" : undefined}
-                            />
-                            <div className="row-meta" style={{ justifyContent: "space-between" }}>
-                              <span>
-                                {formatMoney(card.outstanding)} em aberto de {formatMoney(card.limitAmount)}
-                              </span>
-                              <span>{cardDaysLabel(card)}</span>
-                            </div>
-                            <CardBillLines card={card} onOpenBills={() => setBillsCard(card)} />
-                          </>
-                        ) : (
-                          <>
-                            <div className="row-meta">
-                              {formatMoney(card.outstanding)} em aberto · {cardDaysLabel(card)}
-                            </div>
-                            <CardBillLines card={card} onOpenBills={() => setBillsCard(card)} />
-                          </>
-                        )}
-                      </div>
-                      <div className="row-actions" style={{ display: "flex" }} onClick={(e) => e.stopPropagation()}>
-                        <button
-                          className="btn btn-icon"
-                          onClick={() => setBillsCard(card)}
-                          aria-label={`Faturas de ${card.name}`}
-                          title="Faturas e baixa de pagamento"
-                        >
-                          <IconCalendar size={16} />
-                        </button>
-                        <button
-                          className="btn btn-icon"
-                          onClick={() => setAdjustingCard(card)}
-                          aria-label={`Ajustar fatura em aberto de ${card.name}`}
-                          title="Ajustar o que deve hoje"
-                        >
-                          <IconTarget size={16} />
-                        </button>
-                        <button className="btn btn-icon" onClick={() => setEditingCard(card)} aria-label={`Editar ${card.name}`}>
-                          <IconEdit size={16} />
-                        </button>
-                        <button
-                          className="btn btn-icon danger"
-                          onClick={() => setDeleting({ kind: "card", item: card })}
-                          aria-label={`Excluir ${card.name}`}
-                        >
-                          <IconTrash size={16} />
-                        </button>
-                      </div>
-                    </div>
+                    <CardRow
+                      key={card.id}
+                      card={card}
+                      onEdit={() => setEditingCard(card)}
+                      onOpenBills={() => setBillsCard(card)}
+                    />
                   ))}
                 </div>
               )}
@@ -267,6 +264,14 @@ export function Accounts() {
         <AccountModal
           account={editingAccount === "new" ? null : editingAccount}
           onClose={() => setEditingAccount(null)}
+          onDelete={
+            editingAccount === "new"
+              ? undefined
+              : () => {
+                  setDeleting({ kind: "account", item: editingAccount });
+                  setEditingAccount(null);
+                }
+          }
         />
       )}
       {editingCard && (
@@ -274,17 +279,29 @@ export function Accounts() {
           card={editingCard === "new" ? null : editingCard}
           accounts={activeAccounts}
           onClose={() => setEditingCard(null)}
+          onDelete={
+            editingCard === "new"
+              ? undefined
+              : () => {
+                  setDeleting({ kind: "card", item: editingCard });
+                  setEditingCard(null);
+                }
+          }
+          onAdjustOutstanding={
+            editingCard === "new"
+              ? undefined
+              : () => {
+                  setAdjustingCard(editingCard);
+                  setEditingCard(null);
+                }
+          }
         />
       )}
       {deleting && <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />}
       {transferOpen && <TransferFormModal onClose={() => setTransferOpen(false)} />}
       {adjusting && <AdjustBalanceModal account={adjusting} onClose={() => setAdjusting(null)} />}
       {billsCard && (
-        <BillsModal
-          card={billsCard}
-          accounts={activeAccounts}
-          onClose={() => setBillsCard(null)}
-        />
+        <BillsModal card={billsCard} accounts={activeAccounts} onClose={() => setBillsCard(null)} />
       )}
       {adjustingCard && (
         <AdjustOutstandingModal card={adjustingCard} onClose={() => setAdjustingCard(null)} />
@@ -294,25 +311,47 @@ export function Accounts() {
 }
 
 /**
- * Resumo das faturas do cartão: a que está aberta (pelo dia de fechamento),
- * as que já fecharam e seguem sem baixa, e as parcelas que ainda vão cair.
+ * Um cartão: em destaque só a fatura atual e quando vence. O resto aparece
+ * apenas quando existe (fatura atrasada, limite, parcelas futuras).
  */
-function CardBillLines({ card, onOpenBills }: { card: Card; onOpenBills: () => void }) {
-  const count = card.closedUnpaidCount;
+function CardRow({
+  card,
+  onEdit,
+  onOpenBills,
+}: {
+  card: Card;
+  onEdit: () => void;
+  onOpenBills: () => void;
+}) {
+  const mesFatura = formatMonthLabel(card.openBillMonth).split(" ")[0]?.toLowerCase();
+  const usoLimite = card.limitAmount ? (card.outstanding / card.limitAmount) * 100 : 0;
+
   return (
-    <>
-      <div className="row-meta">
-        Fatura aberta de {formatMonthShort(`${card.openBillMonth}-01`, true)}:{" "}
-        {formatMoney(card.openBillTotal)}
-        {card.openBillDueDate && ` · vence ${formatDate(card.openBillDueDate)}`}
-      </div>
-      {card.closedDue > 0 && (
-        <div className="row-meta">
-          <span style={{ color: "var(--danger)" }}>
-            {count > 0
-              ? `${count} ${count === 1 ? "fatura que já fechou" : "faturas que já fecharam"} sem baixa: `
-              : "De faturas que já fecharam: "}
-            {formatMoney(card.closedDue)}
+    <div className="list-row clickable" style={{ alignItems: "flex-start" }} onClick={onEdit}>
+      <CategoryIcon name={card.name} color={card.color} />
+      <div className="row-main">
+        <div className="category-bar-top">
+          <span className="row-title">
+            {card.name}
+            {card.isDefault && (
+              <span className="badge badge-primary" style={{ marginLeft: 6 }}>padrão</span>
+            )}
+          </span>
+          <span className="nowrap tabular">
+            <strong>{formatMoney(card.openBillTotal)}</strong>
+          </span>
+        </div>
+
+        <div className="row-meta" style={{ justifyContent: "space-between" }}>
+          <span>
+            {card.openBillPaid ? (
+              <>fatura de {mesFatura} paga ✓</>
+            ) : (
+              <>
+                fatura de {mesFatura}
+                {card.openBillDueDate ? ` · vence ${formatDate(card.openBillDueDate)}` : ""}
+              </>
+            )}
           </span>
           <button
             type="button"
@@ -322,24 +361,48 @@ function CardBillLines({ card, onOpenBills }: { card: Card; onOpenBills: () => v
               onOpenBills();
             }}
           >
-            já paguei
+            Faturas
           </button>
         </div>
-      )}
-      {card.futureInstallments > 0 && (
-        <div className="row-meta">
-          + {formatMoney(card.futureInstallments)} em parcelas de faturas futuras
-        </div>
-      )}
-    </>
-  );
-}
 
-function cardDaysLabel(card: Card) {
-  const parts: string[] = [];
-  if (card.closingDay) parts.push(`fecha dia ${card.closingDay}`);
-  if (card.dueDay) parts.push(`vence dia ${card.dueDay}`);
-  return parts.join(" · ") || "sem datas definidas";
+        {card.closedDue > 0 && (
+          <div className="row-meta">
+            <span style={{ color: "var(--out-text)" }}>
+              + {formatMoney(card.closedDue)} de{" "}
+              {card.closedUnpaidCount === 1 ? "fatura fechada" : "faturas fechadas"} sem baixa
+            </span>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenBills();
+              }}
+            >
+              dar baixa
+            </button>
+          </div>
+        )}
+
+        {card.limitAmount ? (
+          <div style={{ marginTop: 8 }}>
+            <ProgressBar percent={usoLimite} tone={usoLimite > 90 ? "bad" : undefined} />
+            <div className="row-meta">
+              {formatMoney(card.outstanding)} de {formatMoney(card.limitAmount)} do limite
+              {card.futureInstallments > 0 &&
+                ` · mais ${formatMoney(card.futureInstallments)} em parcelas futuras`}
+            </div>
+          </div>
+        ) : (
+          card.futureInstallments > 0 && (
+            <div className="row-meta">
+              mais {formatMoney(card.futureInstallments)} em parcelas futuras
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
 }
 
 function AdjustBalanceModal({ account, onClose }: { account: Account; onClose: () => void }) {
@@ -452,7 +515,15 @@ function AdjustOutstandingModal({ card, onClose }: { card: Card; onClose: () => 
   );
 }
 
-function AccountModal({ account, onClose }: { account: Account | null; onClose: () => void }) {
+function AccountModal({
+  account,
+  onClose,
+  onDelete,
+}: {
+  account: Account | null;
+  onClose: () => void;
+  onDelete?: () => void;
+}) {
   const { notifyDataChanged } = useApp();
   const toast = useToast();
   const [name, setName] = useState(account?.name ?? "");
@@ -494,9 +565,16 @@ function AccountModal({ account, onClose }: { account: Account | null; onClose: 
       size="sm"
       onSubmit={handleSubmit}
       footer={
-        <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? <span className="spinner" /> : "Salvar"}
-        </button>
+        <>
+          {onDelete && (
+            <button type="button" className="btn btn-danger-ghost" style={{ marginRight: "auto" }} onClick={onDelete}>
+              Excluir
+            </button>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? <span className="spinner" /> : "Salvar"}
+          </button>
+        </>
       }
     >
       <div className="form-stack">
@@ -559,10 +637,14 @@ function CardModal({
   card,
   accounts,
   onClose,
+  onDelete,
+  onAdjustOutstanding,
 }: {
   card: Card | null;
   accounts: Account[];
   onClose: () => void;
+  onDelete?: () => void;
+  onAdjustOutstanding?: () => void;
 }) {
   const { notifyDataChanged } = useApp();
   const toast = useToast();
@@ -609,9 +691,16 @@ function CardModal({
       size="sm"
       onSubmit={handleSubmit}
       footer={
-        <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? <span className="spinner" /> : "Salvar"}
-        </button>
+        <>
+          {onDelete && (
+            <button type="button" className="btn btn-danger-ghost" style={{ marginRight: "auto" }} onClick={onDelete}>
+              Excluir
+            </button>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? <span className="spinner" /> : "Salvar"}
+          </button>
+        </>
       }
     >
       <div className="form-stack">
@@ -680,6 +769,11 @@ function CardModal({
           checked={cardIsDefault}
           onChange={setCardIsDefault}
         />
+        {onAdjustOutstanding && (
+          <button type="button" className="link-btn" style={{ alignSelf: "flex-start" }} onClick={onAdjustOutstanding}>
+            Corrigir o valor que o cartão deve hoje
+          </button>
+        )}
         {card && (
           <SwitchRow
             title="Arquivar cartão"
