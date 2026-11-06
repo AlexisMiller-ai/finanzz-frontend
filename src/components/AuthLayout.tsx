@@ -93,7 +93,7 @@ export function AuthLayout({
               <strong>Privacidade e segurança</strong>
               <p>
                 Sua senha é guardada com criptografia, a sessão expira sozinha depois de 30 dias e cada conta só
-                enxerga os próprios lançamentos.
+                enxerga os próprios lançamentos. <Link to="/privacidade">Como seus dados são tratados</Link>.
               </p>
             </div>
           </div>

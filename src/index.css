@@ -2089,3 +2089,48 @@ h3 {
   color: var(--text-2);
   margin: 6px 0 -4px;
 }
+
+/* ---------- Aviso de privacidade ---------- */
+.privacy-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 32px 16px 64px;
+}
+.privacy-content {
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 15px;
+}
+.privacy-content h1 {
+  font-size: 28px;
+  margin: 18px 0 2px;
+}
+.privacy-content h2 {
+  font-size: 18px;
+  margin: 28px 0 8px;
+}
+.privacy-content ul {
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+.privacy-content a:not(.privacy-back) {
+  color: var(--primary-text);
+}
+.privacy-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.auth-legal {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.auth-legal a,
+.auth-security a {
+  color: var(--primary-text);
+}
