@@ -124,7 +124,10 @@ export interface UpcomingResponse {
 
 export interface DashboardSummary {
   saldoGeralAcumulado: number;
-  savingsStartDate: string;
+  /** De quando o total guardado conta ("YYYY-MM-DD"); null sem lançamentos. */
+  savingsStartDate: string | null;
+  /** true = data escolhida pela pessoa; false = desde o primeiro lançamento. */
+  savingsStartChosen: boolean;
   entradasPeriodo: number;
   saidasPeriodo: number;
   saldoPeriodo: number;

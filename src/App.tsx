@@ -1,4 +1,4 @@
-import { lazy } from "react";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AppProvider } from "./contexts/AppContext";
@@ -18,6 +18,7 @@ const Accounts = lazy(() => import("./pages/Accounts").then((m) => ({ default: m
 const Import = lazy(() => import("./pages/Import").then((m) => ({ default: m.Import })));
 const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
 const Reports = lazy(() => import("./pages/Reports").then((m) => ({ default: m.Reports })));
+const Privacy = lazy(() => import("./pages/Privacy").then((m) => ({ default: m.Privacy })));
 
 function App() {
   return (
@@ -29,6 +30,15 @@ function App() {
             <Routes>
               <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
               <Route path="/cadastro" element={<GuestRoute><Register /></GuestRoute>} />
+              {/* Pública: precisa poder ser lida antes do cadastro. */}
+              <Route
+                path="/privacidade"
+                element={
+                  <Suspense fallback={null}>
+                    <Privacy />
+                  </Suspense>
+                }
+              />
 
               <Route
                 element={

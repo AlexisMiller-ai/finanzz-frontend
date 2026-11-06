@@ -9,11 +9,13 @@ import type { User } from "../types";
 import { prepararFotoPerfil } from "../utils/image";
 import { UserAvatar } from "../components/ui/Common";
 import { Field, FormError, Segmented } from "../components/ui/Form";
-import { IconCamera, IconDownload, IconLogout } from "../components/ui/Icons";
+import { IconAlert, IconCamera, IconDownload, IconLogout, IconShield, IconTrash } from "../components/ui/Icons";
+import { Modal } from "../components/Modal";
 import { ehIOS, estaInstalado, instalarApp, useInstalavel } from "../utils/pwa";
 
 export function Profile() {
   const { user, updateUser, logout } = useAuth();
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const { theme, setTheme } = useApp();
   const toast = useToast();
   const navigate = useNavigate();
@@ -266,6 +268,31 @@ export function Profile() {
         </div>
       </form>
 
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">Privacidade e dados</h2>
+            <p className="card-subtitle">O que o Finanzz guarda e como apagar tudo</p>
+          </div>
+        </div>
+        <div className="form-stack">
+          <Link to="/privacidade" className="link-btn" style={{ alignSelf: "flex-start" }}>
+            <IconShield size={15} /> Ler o aviso de privacidade
+          </Link>
+          <p className="muted" style={{ margin: 0 }}>
+            Excluir a conta apaga para sempre seus lançamentos, contas, cartões, categorias, orçamentos, metas e
+            foto. Se quiser guardar uma cópia, exporte seus lançamentos em CSV antes.
+          </p>
+          <button
+            className="btn btn-danger-ghost"
+            style={{ alignSelf: "flex-start" }}
+            onClick={() => setDeletingAccount(true)}
+          >
+            <IconTrash size={16} /> Excluir minha conta
+          </button>
+        </div>
+      </div>
+
       <button
         className="btn btn-danger-ghost"
         style={{ alignSelf: "flex-start" }}
@@ -276,7 +303,87 @@ export function Profile() {
       >
         <IconLogout size={16} /> Sair da conta
       </button>
+
+      {deletingAccount && <DeleteAccountModal onClose={() => setDeletingAccount(false)} />}
     </div>
+  );
+}
+
+const CONFIRMACAO = "EXCLUIR";
+
+/**
+ * Exclusão definitiva da conta. Pede a senha (a API confere de novo) e que a
+ * pessoa digite EXCLUIR, para não acontecer por um toque sem querer.
+ */
+function DeleteAccountModal({ onClose }: { onClose: () => void }) {
+  const { logout } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pronto = password.length > 0 && confirmation.trim().toUpperCase() === CONFIRMACAO;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pronto) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.delete("/auth/me", { data: { password } });
+      logout();
+      navigate("/login", { replace: true });
+      toast("Sua conta e todos os seus dados foram excluídos.");
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Excluir minha conta"
+      description="Isso apaga todos os seus dados do Finanzz na hora e não pode ser desfeito."
+      onClose={onClose}
+      size="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <button type="submit" className="btn btn-danger" disabled={!pronto || deleting}>
+          {deleting ? <span className="spinner" /> : "Excluir para sempre"}
+        </button>
+      }
+    >
+      <div className="form-stack">
+        <div className="alert alert-warning">
+          <IconAlert size={16} />
+          <span>
+            Saem lançamentos, contas, cartões, faturas, categorias, orçamentos, metas, foto e o seu acesso.
+          </span>
+        </div>
+        <Field label="Sua senha" htmlFor="delete-password">
+          <input
+            id="delete-password"
+            type="password"
+            className="input"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        <Field label={`Digite ${CONFIRMACAO} para confirmar`} htmlFor="delete-confirmation">
+          <input
+            id="delete-confirmation"
+            className="input"
+            autoComplete="off"
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+          />
+        </Field>
+        <FormError message={error} />
+      </div>
+    </Modal>
   );
 }
 

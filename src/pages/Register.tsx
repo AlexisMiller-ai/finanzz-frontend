@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { getErrorMessage } from "../services/api";
 import { AuthLayout, IconInput, PasswordInput } from "../components/AuthLayout";
@@ -65,6 +65,9 @@ export function Register() {
         <button type="submit" className="btn btn-primary btn-lg btn-block auth-submit" disabled={loading}>
           {loading ? <span className="spinner" /> : <>Criar minha conta <IconArrowRight size={16} /></>}
         </button>
+        <p className="auth-legal">
+          Ao criar a conta, você concorda com o <Link to="/privacidade">aviso de privacidade</Link>.
+        </p>
       </form>
 
     </AuthLayout>

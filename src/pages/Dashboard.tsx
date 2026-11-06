@@ -25,6 +25,7 @@ import {
   getGreeting,
   remainingDaysInMonth,
   shiftMonth,
+  todayISO,
 } from "../utils/date";
 import { budgetTone } from "../utils/format";
 import { isReserve } from "../utils/accounts";
@@ -32,7 +33,7 @@ import { formatAxisValue, formatMoney, formatPercent, formatSignedMoney, numberT
 import { Modal } from "../components/Modal";
 import { TransactionFormModal } from "../components/TransactionForm";
 import { CategoryIcon, EmptyState, MonthSwitcher, ProgressBar, Skeleton, Sparkline } from "../components/ui/Common";
-import { Field, FormError, MoneyInput } from "../components/ui/Form";
+import { Field, FormError, MoneyInput, Segmented } from "../components/ui/Form";
 import {
   IconAlert,
   IconArrowDown,
@@ -124,7 +125,11 @@ export function Dashboard() {
 
       {goalOpen && s && <GoalModal month={month} current={s.savingsGoal} onClose={() => setGoalOpen(false)} />}
       {savingsOpen && s && (
-        <SavingsModal current={s.saldoGeralAcumulado} onClose={() => setSavingsOpen(false)} />
+        <SavingsModal
+          current={s.saldoGeralAcumulado}
+          startDate={s.savingsStartChosen ? s.savingsStartDate : null}
+          onClose={() => setSavingsOpen(false)}
+        />
       )}
       {editing && <TransactionFormModal editing={editing} onClose={() => setEditing(null)} />}
     </div>
@@ -415,7 +420,9 @@ function MoneyCard({
           <div className="row-main">
             <div className="row-title">Total guardado</div>
             <div className="row-meta">
-              desde {formatMonthShort(s.savingsStartDate, true).toLowerCase()}
+              {s.savingsStartDate
+                ? `desde ${formatMonthShort(s.savingsStartDate, true).toLowerCase()}`
+                : "começa no primeiro lançamento"}
             </div>
           </div>
           <div className={`row-amount ${s.saldoGeralAcumulado < 0 ? "text-out" : ""}`}>
@@ -728,19 +735,44 @@ function GoalModal({ month, current, onClose }: { month: string; current: number
   );
 }
 
-function SavingsModal({ current, onClose }: { current: number; onClose: () => void }) {
+/**
+ * Ajuste do total guardado: de quando contar e quanto há guardado hoje.
+ * Mudar só a data muda o cálculo (o ajuste antigo continua); digitar o valor
+ * corrige o total para bater com o que a pessoa tem de verdade.
+ */
+function SavingsModal({
+  current,
+  startDate,
+  onClose,
+}: {
+  current: number;
+  /** Data escolhida pela pessoa; null = desde o primeiro lançamento. */
+  startDate: string | null;
+  onClose: () => void;
+}) {
   const { notifyDataChanged } = useApp();
   const toast = useToast();
   const [cents, setCents] = useState(numberToCents(current));
+  const [mode, setMode] = useState<"primeiro" | "data">(startDate ? "data" : "primeiro");
+  const [date, setDate] = useState(startDate ?? `${getCurrentMonth()}-01`);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const novaData = mode === "data" ? date : null;
+  const mudouData = novaData !== startDate;
+  const mudouValor = cents !== numberToCents(current);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (mode === "data" && !date) return setError("Escolha a data de início.");
+    if (!mudouData && !mudouValor) return onClose();
     setSaving(true);
     setError(null);
     try {
-      await api.put("/savings", { manual_total: cents / 100 });
+      await api.put("/savings", {
+        ...(mudouData ? { start_date: novaData } : {}),
+        ...(mudouValor ? { manual_total: cents / 100 } : {}),
+      });
       toast("Total guardado atualizado");
       notifyDataChanged();
       onClose();
@@ -764,8 +796,46 @@ function SavingsModal({ current, onClose }: { current: number; onClose: () => vo
       }
     >
       <div className="form-stack">
-        <Field label="Valor guardado hoje" htmlFor="savings" hint="Para valor negativo, digite um sinal de menos.">
-          <MoneyInput id="savings" cents={cents} onChange={setCents} large autoFocus allowNegative />
+        <Field
+          label="Contar a partir de"
+          hint={
+            mode === "primeiro"
+              ? "Soma tudo desde o seu primeiro lançamento."
+              : "Lançamentos antes dessa data ficam fora do total."
+          }
+        >
+          <Segmented<"primeiro" | "data">
+            label="Contar a partir de"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "primeiro", label: "Primeiro lançamento" },
+              { value: "data", label: "Uma data" },
+            ]}
+          />
+        </Field>
+        {mode === "data" && (
+          <Field label="Data de início" htmlFor="savings-start">
+            <input
+              id="savings-start"
+              type="date"
+              className="input"
+              value={date}
+              max={todayISO()}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
+        )}
+        <Field
+          label="Valor guardado hoje"
+          htmlFor="savings"
+          hint={
+            mudouData && !mudouValor
+              ? "Deixe como está para o total ser recalculado pela nova data, ou digite o valor real."
+              : "Para valor negativo, digite um sinal de menos."
+          }
+        >
+          <MoneyInput id="savings" cents={cents} onChange={setCents} large allowNegative />
         </Field>
         <FormError message={error} />
       </div>
