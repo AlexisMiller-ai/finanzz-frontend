@@ -103,206 +103,213 @@ export function Profile() {
   }
 
   return (
-    <div className="page" style={{ maxWidth: 720 }}>
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <label className="avatar-upload" title="Trocar foto">
-            <UserAvatar name={user?.name ?? ""} avatar={user?.avatar} size={64} />
-            <span className="avatar-upload-badge" aria-hidden="true">
-              <IconCamera size={13} />
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              aria-label="Trocar foto de perfil"
-              disabled={savingPhoto}
-              onChange={(e) => {
-                const arquivo = e.target.files?.[0];
-                if (arquivo) trocarFoto(arquivo);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <div>
-            <div className="eyebrow-row">
-              <span className="eyebrow">Sua conta</span>
+    <div className="page profile-page">
+      <section className="card profile-hero">
+        <label className="avatar-upload" title="Trocar foto">
+          <UserAvatar name={user?.name ?? ""} avatar={user?.avatar} size={88} />
+          <span className="avatar-upload-badge" aria-hidden="true">
+            <IconCamera size={14} />
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            aria-label="Trocar foto de perfil"
+            disabled={savingPhoto}
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo) trocarFoto(arquivo);
+              e.target.value = "";
+            }}
+          />
+        </label>
+
+        <div className="profile-hero-info">
+          <span className="eyebrow">Sua conta</span>
+          <h1 className="page-title">{user?.name}</h1>
+          <p className="page-subtitle">{user?.email}</p>
+          <div className="page-actions profile-hero-actions">
+            <label className="btn btn-secondary btn-sm" style={{ position: "relative" }}>
+              {savingPhoto ? <span className="spinner" /> : user?.avatar ? "Trocar foto" : "Adicionar foto"}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={savingPhoto}
+                onChange={(e) => {
+                  const arquivo = e.target.files?.[0];
+                  if (arquivo) trocarFoto(arquivo);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {user?.avatar && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={removerFoto} disabled={savingPhoto}>
+                Remover foto
+              </button>
+            )}
+          </div>
+          <FormError message={photoError} />
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-secondary profile-hero-logout"
+          onClick={() => {
+            logout();
+            navigate("/login");
+          }}
+        >
+          <IconLogout size={16} /> Sair da conta
+        </button>
+      </section>
+
+      <div className="profile-grid">
+        {/* Coluna da conta: quem você é e como entra. */}
+        <div className="profile-col">
+          <form className="card" onSubmit={saveName}>
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">Dados pessoais</h2>
+                <p className="card-subtitle">Como você aparece no Finanzz</p>
+              </div>
             </div>
-            <h1 className="page-title">{user?.name}</h1>
-            <p className="page-subtitle" style={{ marginTop: 2 }}>{user?.email}</p>
-            <div className="page-actions" style={{ marginTop: 8 }}>
-              <label className="btn btn-secondary btn-sm" style={{ position: "relative" }}>
-                {savingPhoto ? <span className="spinner" /> : user?.avatar ? "Trocar foto" : "Adicionar foto"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  disabled={savingPhoto}
-                  onChange={(e) => {
-                    const arquivo = e.target.files?.[0];
-                    if (arquivo) trocarFoto(arquivo);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              {user?.avatar && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={removerFoto} disabled={savingPhoto}>
-                  Remover
+            <div className="form-stack">
+              <div className="field-row">
+                <Field label="Nome" htmlFor="profile-name">
+                  <input id="profile-name" className="input" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field label="E-mail" htmlFor="profile-email" hint="O e-mail é o seu login e não pode ser alterado.">
+                  <input id="profile-email" className="input" value={user?.email ?? ""} disabled />
+                </Field>
+              </div>
+              <FormError message={nameError} />
+              <div>
+                <button className="btn btn-primary" disabled={savingName || name.trim() === user?.name}>
+                  {savingName ? <span className="spinner" /> : "Salvar alterações"}
                 </button>
-              )}
+              </div>
             </div>
-            <FormError message={photoError} />
-          </div>
-        </div>
-      </div>
+          </form>
 
-      <form className="card" onSubmit={saveName}>
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">Dados pessoais</h2>
-          </div>
-        </div>
-        <div className="form-stack">
-          <div className="field-row">
-            <Field label="Nome" htmlFor="profile-name">
-              <input id="profile-name" className="input" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
-            </Field>
-            <Field label="E-mail" htmlFor="profile-email">
-              <input id="profile-email" className="input" value={user?.email ?? ""} disabled />
-            </Field>
-          </div>
-          <FormError message={nameError} />
-          <div>
-            <button className="btn btn-primary" disabled={savingName || name.trim() === user?.name}>
-              {savingName ? <span className="spinner" /> : "Salvar"}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">Preferências</h2>
-            <p className="card-subtitle">O dia de fechamento agora fica em cada cartão</p>
-          </div>
-        </div>
-        <div className="form-stack">
-          <Field label="Tema">
-            <Segmented<ThemePreference>
-              label="Tema"
-              value={theme}
-              onChange={setTheme}
-              options={[
-                { value: "system", label: "Automático" },
-                { value: "light", label: "Claro" },
-                { value: "dark", label: "Escuro" },
-              ]}
-            />
-          </Field>
-          <Field label="Atalhos">
-            <div className="page-actions">
-              <Link className="btn btn-secondary btn-sm" to="/relatorios">
-                Relatórios
-              </Link>
-              <Link className="btn btn-secondary btn-sm" to="/contas">
-                Contas e cartões
-              </Link>
-              <Link className="btn btn-secondary btn-sm" to="/categorias">
-                Categorias
-              </Link>
-              <Link className="btn btn-secondary btn-sm" to="/importar">
-                Importar extrato
-              </Link>
+          <form className="card" onSubmit={savePassword}>
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">Alterar senha</h2>
+                <p className="card-subtitle">Os outros aparelhos são desconectados quando a senha muda</p>
+              </div>
             </div>
-          </Field>
+            <div className="form-stack">
+              <Field label="Senha atual" htmlFor="current-password">
+                <input
+                  id="current-password"
+                  className="input"
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </Field>
+              <div className="field-row">
+                <Field label="Nova senha" htmlFor="new-password" hint="Mínimo de 8 caracteres">
+                  <input
+                    id="new-password"
+                    className="input"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </Field>
+                <Field label="Confirmar nova senha" htmlFor="confirm-password">
+                  <input
+                    id="confirm-password"
+                    className="input"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <FormError message={passwordError} />
+              <div>
+                <button className="btn btn-secondary" disabled={savingPassword || !currentPassword || !newPassword}>
+                  {savingPassword ? <span className="spinner" /> : "Alterar senha"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Coluna do app: preferências, instalação e dados. */}
+        <div className="profile-col">
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">Preferências</h2>
+                <p className="card-subtitle">Aparência e atalhos</p>
+              </div>
+            </div>
+            <div className="form-stack">
+              <Field label="Tema">
+                <Segmented<ThemePreference>
+                  label="Tema"
+                  value={theme}
+                  onChange={setTheme}
+                  options={[
+                    { value: "system", label: "Automático" },
+                    { value: "light", label: "Claro" },
+                    { value: "dark", label: "Escuro" },
+                  ]}
+                />
+              </Field>
+              <Field label="Atalhos">
+                <div className="page-actions">
+                  <Link className="btn btn-secondary btn-sm" to="/relatorios">
+                    Relatórios
+                  </Link>
+                  <Link className="btn btn-secondary btn-sm" to="/contas">
+                    Contas e cartões
+                  </Link>
+                  <Link className="btn btn-secondary btn-sm" to="/categorias">
+                    Categorias
+                  </Link>
+                  <Link className="btn btn-secondary btn-sm" to="/importar">
+                    Importar extrato
+                  </Link>
+                </div>
+              </Field>
+            </div>
+          </div>
+
+          <InstalarCard />
+
+          <div className="card card-danger">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title">Privacidade e dados</h2>
+                <p className="card-subtitle">O que o Finanzz guarda e como apagar tudo</p>
+              </div>
+            </div>
+            <div className="form-stack">
+              <Link to="/privacidade" className="link-btn" style={{ alignSelf: "flex-start" }}>
+                <IconShield size={15} /> Ler o aviso de privacidade
+              </Link>
+              <p className="muted" style={{ margin: 0 }}>
+                Excluir a conta apaga para sempre seus lançamentos, contas, cartões, categorias, orçamentos, metas
+                e foto. Se quiser guardar uma cópia, exporte seus lançamentos em CSV antes.
+              </p>
+              <button
+                className="btn btn-danger-ghost"
+                style={{ alignSelf: "flex-start" }}
+                onClick={() => setDeletingAccount(true)}
+              >
+                <IconTrash size={16} /> Excluir minha conta
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-
-      <InstalarCard />
-
-      <form className="card" onSubmit={savePassword}>
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">Alterar senha</h2>
-          </div>
-        </div>
-        <div className="form-stack">
-          <Field label="Senha atual" htmlFor="current-password">
-            <input
-              id="current-password"
-              className="input"
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-            />
-          </Field>
-          <div className="field-row">
-            <Field label="Nova senha" htmlFor="new-password">
-              <input
-                id="new-password"
-                className="input"
-                type="password"
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </Field>
-            <Field label="Confirmar nova senha" htmlFor="confirm-password">
-              <input
-                id="confirm-password"
-                className="input"
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </Field>
-          </div>
-          <FormError message={passwordError} />
-          <div>
-            <button className="btn btn-secondary" disabled={savingPassword || !currentPassword || !newPassword}>
-              {savingPassword ? <span className="spinner" /> : "Alterar senha"}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">Privacidade e dados</h2>
-            <p className="card-subtitle">O que o Finanzz guarda e como apagar tudo</p>
-          </div>
-        </div>
-        <div className="form-stack">
-          <Link to="/privacidade" className="link-btn" style={{ alignSelf: "flex-start" }}>
-            <IconShield size={15} /> Ler o aviso de privacidade
-          </Link>
-          <p className="muted" style={{ margin: 0 }}>
-            Excluir a conta apaga para sempre seus lançamentos, contas, cartões, categorias, orçamentos, metas e
-            foto. Se quiser guardar uma cópia, exporte seus lançamentos em CSV antes.
-          </p>
-          <button
-            className="btn btn-danger-ghost"
-            style={{ alignSelf: "flex-start" }}
-            onClick={() => setDeletingAccount(true)}
-          >
-            <IconTrash size={16} /> Excluir minha conta
-          </button>
-        </div>
-      </div>
-
-      <button
-        className="btn btn-danger-ghost"
-        style={{ alignSelf: "flex-start" }}
-        onClick={() => {
-          logout();
-          navigate("/login");
-        }}
-      >
-        <IconLogout size={16} /> Sair da conta
-      </button>
 
       {deletingAccount && <DeleteAccountModal onClose={() => setDeletingAccount(false)} />}
     </div>
