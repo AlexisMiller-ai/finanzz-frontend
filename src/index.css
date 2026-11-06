@@ -2134,3 +2134,63 @@ h3 {
 .auth-security a {
   color: var(--primary-text);
 }
+
+/* ---------- Perfil ---------- */
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+}
+.profile-hero-info {
+  flex: 1;
+  min-width: 0;
+}
+.profile-hero-info .page-title {
+  margin-top: 4px;
+}
+.profile-hero-info .page-subtitle {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.profile-hero-actions {
+  margin-top: 12px;
+}
+.profile-hero-logout {
+  align-self: flex-start;
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.profile-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.card-danger {
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+}
+@media (max-width: 1100px) {
+  .profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .profile-hero {
+    flex-wrap: wrap;
+    padding: 18px;
+    gap: 14px;
+  }
+  .profile-hero-logout {
+    width: 100%;
+    justify-content: center;
+  }
+  /* Nome/e-mail e as senhas empilham: lado a lado ficam apertados no celular. */
+  .profile-page .field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
